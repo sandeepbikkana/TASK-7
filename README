@@ -1,0 +1,221 @@
+# 🚀 Getting started with Strapi
+
+Strapi comes with a full featured [Command Line Interface](https://docs.strapi.io/dev-docs/cli) (CLI) which lets you scaffold and manage your project in seconds.
+
+### `develop`
+
+Start your Strapi application with autoReload enabled. [Learn more](https://docs.strapi.io/dev-docs/cli#strapi-develop)
+
+```
+npm run develop
+# or
+yarn develop
+```
+
+### `start`
+
+Start your Strapi application with autoReload disabled. [Learn more](https://docs.strapi.io/dev-docs/cli#strapi-start)
+
+```
+npm run start
+# or
+yarn start
+```
+
+### `build`
+
+Build your admin panel. [Learn more](https://docs.strapi.io/dev-docs/cli#strapi-build)
+
+```
+npm run build
+# or
+yarn build
+```
+
+## ⚙️ Deployment
+
+Strapi gives you many possible deployment options for your project including [Strapi Cloud](https://cloud.strapi.io). Browse the [deployment section of the documentation](https://docs.strapi.io/dev-docs/deployment) to find the best solution for your use case.
+
+```
+yarn strapi deploy
+```
+
+
+📘 README.md — Strapi Dockerization with PostgreSQL & Nginx
+🚀 Project Overview
+
+This repository contains a Dockerized Strapi CMS setup using multi-stage builds, PostgreSQL database support, and Nginx reverse proxy routing. It demonstrates a scalable backend architecture suitable for production deployment.
+
+🧩 Tasks Summary
+
+---------------- TASK1 ------------------------------
+
+📝 Task 1 — Strapi Local Deployment
+
+Installed Strapi locally
+
+Started admin panel at http://localhost:1337/admin
+
+Created and tested content models
+
+Verified content creation in Content Manager UI
+
+---------------- TASK2 ------------------------------
+
+🐳 Task 2 — Dockerfile Local Build
+
+Built a Docker image for Strapi
+
+Configured volumes for persistence
+
+---------------- TASK3 ------------------------------
+🌐 Task 3 — Full Dockerized Strapi Environment
+
+Successfully created a 3-container stack:
+
+🟦 PostgreSQL
+
+🟧 Strapi
+
+🟩 Nginx Reverse Proxy
+
+🔹 All run on a shared Docker network strapi-net
+
+Architecture:
+Browser → Nginx(8080) → Strapi(1337) → PostgreSQL
+
+Final Expected Result:
+
+✔ Strapi Admin accessible at
+👉 http://localhost:8080/admin
+
+🧠 Features Implemented
+Feature	Status
+Strapi CMS running in Docker	✅
+PostgreSQL database container	✅
+Reverse proxy via Nginx	✅
+Custom Docker network	✅
+Multi-stage production-ready build	✅
+Persistent data volumes	✅
+Accessible admin over reverse proxy	✅
+📦 Folder Structure
+project-root/
+│ Dockerfile
+│ docker-compose.yml
+│ nginx.conf
+│ README.md
+│ config/
+│ src/
+│ public/uploads/
+│ database/
+
+🔧 Docker Network
+
+Before running containers:
+
+docker network create strapi-net
+
+🐳 Docker Compose Commands
+▶️ Start Containers
+docker compose build --no-cache
+docker compose up
+
+🛑 Stop & clean containers & volumes
+docker compose down -v
+
+🌎 Accessing Strapi
+Service	URL
+Strapi Admin	http://localhost:8080/admin
+
+Reverse Proxy	http://localhost:8080
+
+Direct Strapi (internal only)	http://localhost:1337
+🛠 Multi-Stage Docker Build
+
+The Dockerfile uses two stages:
+
+Stage 1 → Builds admin UI
+
+Stage 2 → Runs lightweight production image
+
+✔ Optimized images
+✔ Faster deployments
+
+🛢 PostgreSQL Configuration
+
+Environment variables:
+
+POSTGRES_USER: postgres
+POSTGRES_PASSWORD: postgres
+POSTGRES_DB: strapi
+
+
+Persistence:
+
+postgres_data:/var/lib/postgresql/data
+
+🌐 Nginx Reverse Proxy
+
+Maps host http://localhost:8080 → Strapi on port 1337
+
+Secures routing
+
+Prepares production scaling
+
+🎯 Outcome Demonstration
+
+Results Achieved Successfully:
+
+Strapi CMS fully running in Docker
+
+PostgreSQL database container working
+
+Reverse-proxy routing with Nginx
+
+Admin dashboard accessible at http://localhost:8080/admin
+
+Isolation via Docker network
+
+----------------TASK4------------------------------
+
+Explain the problem Docker solves
+Virtual Machines vs Docker
+Understanding Docker Architecture -  What gets installed when Docker is installed?
+Dockerfile Deep Dive - Explain each line
+Key Docker Commands
+Docker Networking
+Volumes & Persistence
+Docker compose
+
+** Added docker.md file 
+
+-----------------------TASK-5---------------------------------
+
+TASK :Deploy Strapi on EC2 using Terraform and Docker.
+
+1)Terraform for Infrastructure as Code
+2)AWS EC2 for hosting Strapi
+3)AWS RDS (PostgreSQL) as the backend database
+4)AWS ECR as a container image repository
+5)Docker to containerize Strapi
+
+----------------------TASK-6---------------------------------------
+TASK : General Automate Strapi Deployment with GitHub Actions + Terraform
+
+CI Pipeline (Continuous Integration)
+1)Builds the Strapi Docker image
+2)Pushes the image to AWS ECR
+3)Produces an image tag output used by CD pipeline
+
+CD Pipeline (Continuous Deployment)
+1)Accepts the image tag manually
+2)Runs Terraform (init → plan → apply)
+3)Provisions AWS Infrastructure
+4)EC2 automatically pulls the correct tagged image from ECR
+5)Runs Strapi container connected to RDS PostgreSQL
+
+This establishes a full automated DevOps flow from code → image → infrastructure → deployment.
+
+
+
+
