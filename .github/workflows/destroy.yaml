@@ -3,10 +3,10 @@ name: Terraform Destroy (manual)
 on:
   workflow_dispatch:
     inputs:
-      confirm_destroy: DESTROY
+      confirm_destroy: 
         description: "add Destroy it will delete"
         required: true
-        default: "DESTROY"
+        default: ""
 
 jobs:
   destroy:
