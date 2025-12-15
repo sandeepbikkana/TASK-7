@@ -3,8 +3,8 @@ name: Terraform Destroy (manual)
 on:
   workflow_dispatch:
     inputs:
-      confirm_destroy: DESTROY
-        description: "Type DESTROY to confirm resource deletion"
+      confirm_destroy:
+        description: DESTROY
         required: true
         default: ""
 
