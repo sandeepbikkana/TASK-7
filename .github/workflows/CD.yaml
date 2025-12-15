@@ -4,53 +4,51 @@ on:
   workflow_dispatch:
     inputs:
       image_tag:
-        description: 835c1be0
+        description: "Docker image tag from CI"
         required: true
-        default: ""
-      docker_repo:
-        description: "ECR repository URI (optional, will be discovered if empty)"
-        required: false
 
 jobs:
   terraform:
     runs-on: ubuntu-latest
-    env:
-      AWS_REGION: ${{ secrets.AWS_REGION }}
 
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v3
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region:            ${{ secrets.AWS_REGION }}
 
-      - name: Setup Terraform CLI
+      - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.5.0
 
-      - name: Terraform Init
-        working-directory: terraform/
+      - name: Terraform Init (S3 backend)
+        working-directory: terraform
         run: terraform init -input=false
-        
+
       - name: Terraform Plan
-        working-directory: terraform/
+        working-directory: terraform
         run: |
-          terraform plan -input=false \
-            -var="aws_access_key_id=${{ secrets.AWS_ACCESS_KEY_ID }}" \
-            -var="aws_secret_access_key=${{ secrets.AWS_SECRET_ACCESS_KEY }}" \
+          terraform plan \
+            -var="ecr_repo=${{ secrets.ECR_REPO }}" \
             -var="image_tag=${{ github.event.inputs.image_tag }}" \
+            -var="db_username=${{ secrets.DB_USERNAME }}" \
+            -var="db_password=${{ secrets.DB_PASSWORD }}" \
+            -var="app_keys=${{ secrets.APP_KEYS }}" \
+            -var="admin_jwt_secret=${{ secrets.ADMIN_JWT_SECRET }}" \
+            -var="jwt_secret=${{ secrets.JWT_SECRET }}" \
+            -var="api_token_salt=${{ secrets.API_TOKEN_SALT }}" \
             -out=tfplan
 
-
       - name: Terraform Apply
-        working-directory: terraform/
-        run: terraform apply -input=false -auto-approve tfplan
+        working-directory: terraform
+        run: terraform apply -auto-approve tfplan
 
-      - name: Show outputs
-        working-directory: terraform/
-        run: terraform output -json
+      - name: Terraform Outputs
+        working-directory: terraform
+        run: terraform output
