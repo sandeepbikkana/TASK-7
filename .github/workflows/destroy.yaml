@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       confirm_destroy:
-        description: DESTROY
+        description: "add Destroy it will delete"
         required: true
-        default: ""
+        default: DESTROY
 
 jobs:
   destroy:
