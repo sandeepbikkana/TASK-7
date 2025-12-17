@@ -1,23 +1,61 @@
+# name: Terraform Destroy (manual)
+
+# on:
+#   workflow_dispatch:
+#     inputs:
+#       confirm_destroy: 
+#         description: "add Destroy it will delete"
+#         required: true
+#         default: ""
+
+# jobs:
+#   destroy:
+#     if: github.event.inputs.confirm_destroy == 'DESTROY'
+#     runs-on: ubuntu-latest
+
+#     env:
+#       AWS_REGION: ${{ secrets.AWS_REGION }}
+
+#     steps:
+#       - name: Checkout repository
+#         uses: actions/checkout@v4
+
+#       - name: Configure AWS credentials
+#         uses: aws-actions/configure-aws-credentials@v3
+#         with:
+#           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+#           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+#           aws-region: ${{ secrets.AWS_REGION }}
+
+#       - name: Setup Terraform
+#         uses: hashicorp/setup-terraform@v2
+#         with:
+#           terraform_version: 1.5.0
+
+#       - name: Terraform Init (S3 backend)
+#         working-directory: terraform
+#         run: terraform init -input=false
+
+#       - name: Terraform Destroy
+#         working-directory: terraform
+#         run: terraform destroy -auto-approve
+
 name: Terraform Destroy (manual)
 
 on:
   workflow_dispatch:
     inputs:
-      confirm_destroy: 
-        description: "add Destroy it will delete"
+      confirm_destroy:
+        description: "Type DESTROY to confirm"
         required: true
-        default: ""
 
 jobs:
   destroy:
     if: github.event.inputs.confirm_destroy == 'DESTROY'
     runs-on: ubuntu-latest
 
-    env:
-      AWS_REGION: ${{ secrets.AWS_REGION }}
-
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Configure AWS credentials
@@ -32,10 +70,20 @@ jobs:
         with:
           terraform_version: 1.5.0
 
-      - name: Terraform Init (S3 backend)
+      - name: Terraform Init
         working-directory: terraform
-        run: terraform init -input=false
+        run: terraform init
 
       - name: Terraform Destroy
         working-directory: terraform
+        env:
+          TF_VAR_ecr_repo: ${{ secrets.ECR_REPO }}
+          TF_VAR_image_tag: "destroy"
+          TF_VAR_db_username: ${{ secrets.DB_USERNAME }}
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+          TF_VAR_app_keys: ${{ secrets.APP_KEYS }}
+          TF_VAR_admin_jwt_secret: ${{ secrets.ADMIN_JWT_SECRET }}
+          TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
+          TF_VAR_api_token_salt: ${{ secrets.API_TOKEN_SALT }}
         run: terraform destroy -auto-approve
+
