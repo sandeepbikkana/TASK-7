@@ -5,3 +5,6 @@ output "alb_url" {
 output "rds_endpoint" {
   value = aws_db_instance.strapi.address
 }
+output "log_group" {
+  value = aws_cloudwatch_log_group.strapi.name
+}
