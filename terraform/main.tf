@@ -18,6 +18,15 @@ data "aws_subnets" "default" {
 }
 
 ############################
+# CLOUDWATCH LOG GROUP
+############################
+
+resource "aws_cloudwatch_log_group" "strapi" {
+  name              = "/ecs/strapi"
+  retention_in_days = 14
+}
+
+############################
 # ECS CLUSTER
 ############################
 
@@ -29,6 +38,7 @@ resource "aws_ecs_cluster" "strapi" {
 # SECURITY GROUPS
 ############################
 
+# ALB SG
 resource "aws_security_group" "alb_sg" {
   name   = "strapi-alb-sg"
   vpc_id = data.aws_vpc.default.id
@@ -48,6 +58,7 @@ resource "aws_security_group" "alb_sg" {
   }
 }
 
+# ECS SG
 resource "aws_security_group" "ecs_sg" {
   name   = "strapi-ecs-sg"
   vpc_id = data.aws_vpc.default.id
@@ -67,6 +78,7 @@ resource "aws_security_group" "ecs_sg" {
   }
 }
 
+# RDS SG
 resource "aws_security_group" "rds_sg" {
   name   = "strapi-rds-sg"
   vpc_id = data.aws_vpc.default.id
@@ -114,7 +126,7 @@ resource "aws_db_instance" "strapi" {
 }
 
 ############################
-# ALB
+# APPLICATION LOAD BALANCER
 ############################
 
 resource "aws_lb" "strapi" {
@@ -130,6 +142,15 @@ resource "aws_lb_target_group" "strapi" {
   protocol    = "HTTP"
   vpc_id      = data.aws_vpc.default.id
   target_type = "ip"
+
+  health_check {
+    path                = "/admin"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 3
+    matcher             = "200-399"
+  }
 }
 
 resource "aws_lb_listener" "http" {
@@ -186,6 +207,15 @@ resource "aws_ecs_task_definition" "strapi" {
       containerPort = 1337
     }]
 
+    logConfiguration = {
+      logDriver = "awslogs"
+      options = {
+        awslogs-group         = aws_cloudwatch_log_group.strapi.name
+        awslogs-region        = var.aws_region
+        awslogs-stream-prefix = "ecs/strapi"
+      }
+    }
+
     environment = [
       { name = "NODE_ENV", value = "production" },
 
@@ -228,4 +258,40 @@ resource "aws_ecs_service" "strapi" {
   }
 
   depends_on = [aws_lb_listener.http]
+}
+
+############################
+# CLOUDWATCH ALARMS
+############################
+
+resource "aws_cloudwatch_metric_alarm" "high_cpu" {
+  alarm_name          = "strapi-high-cpu"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/ECS"
+  period              = 60
+  statistic           = "Average"
+  threshold           = 80
+
+  dimensions = {
+    ClusterName = aws_ecs_cluster.strapi.name
+    ServiceName = aws_ecs_service.strapi.name
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "high_memory" {
+  alarm_name          = "strapi-high-memory"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "MemoryUtilization"
+  namespace           = "AWS/ECS"
+  period              = 60
+  statistic           = "Average"
+  threshold           = 80
+
+  dimensions = {
+    ClusterName = aws_ecs_cluster.strapi.name
+    ServiceName = aws_ecs_service.strapi.name
+  }
 }
