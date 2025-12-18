@@ -1,10 +1,29 @@
 output "alb_url" {
-  value = "http://${aws_lb.strapi.dns_name}"
+  description = "Public URL of the Strapi Application Load Balancer"
+  value       = "http://${aws_lb.sandeep_strapi.dns_name}"
 }
 
 output "rds_endpoint" {
-  value = aws_db_instance.strapi.address
+  description = "RDS PostgreSQL endpoint for Strapi"
+  value       = aws_db_instance.sandeep_strapi.address
 }
+
 output "log_group" {
-  value = aws_cloudwatch_log_group.strapi.name
+  description = "CloudWatch Log Group for ECS Strapi logs"
+  value       = aws_cloudwatch_log_group.sandeep_strapi.name
+}
+
+output "ecs_cluster_name" {
+  description = "ECS Cluster name"
+  value       = aws_ecs_cluster.sandeep_strapi.name
+}
+
+output "ecs_service_name" {
+  description = "ECS Service name"
+  value       = aws_ecs_service.sandeep_strapi.name
+}
+
+output "cloudwatch_dashboard" {
+  description = "CloudWatch dashboard name for Strapi ECS monitoring"
+  value       = aws_cloudwatch_dashboard.sandeep_strapi.dashboard_name
 }
