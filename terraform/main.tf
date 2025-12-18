@@ -255,6 +255,74 @@ resource "aws_ecs_service" "sandeep_strapi" {
 }
 
 ############################
+# CLOUDWATCH ALARMS
+############################
+
+resource "aws_cloudwatch_metric_alarm" "sandeep_high_cpu" {
+  alarm_name          = "sandeep-strapi-high-cpu"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/ECS"
+  period              = 60
+  statistic           = "Average"
+  threshold           = 80
+
+  dimensions = {
+    ClusterName = aws_ecs_cluster.sandeep_strapi.name
+    ServiceName = aws_ecs_service.sandeep_strapi.name
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "sandeep_high_memory" {
+  alarm_name          = "sandeep-strapi-high-memory"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "MemoryUtilization"
+  namespace           = "AWS/ECS"
+  period              = 60
+  statistic           = "Average"
+  threshold           = 80
+
+  dimensions = {
+    ClusterName = aws_ecs_cluster.sandeep_strapi.name
+    ServiceName = aws_ecs_service.sandeep_strapi.name
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "sandeep_task_count_low" {
+  alarm_name          = "sandeep-strapi-task-count-low"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "RunningTaskCount"
+  namespace           = "AWS/ECS"
+  period              = 60
+  statistic           = "Average"
+  threshold           = 1
+
+  dimensions = {
+    ClusterName = aws_ecs_cluster.sandeep_strapi.name
+    ServiceName = aws_ecs_service.sandeep_strapi.name
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "sandeep_unhealthy_targets" {
+  alarm_name          = "sandeep-strapi-unhealthy-targets"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 1
+  metric_name         = "UnHealthyHostCount"
+  namespace           = "AWS/ApplicationELB"
+  period              = 60
+  statistic           = "Average"
+  threshold           = 0
+
+  dimensions = {
+    LoadBalancer = aws_lb.sandeep_strapi.arn_suffix
+    TargetGroup  = aws_lb_target_group.sandeep_strapi.arn_suffix
+  }
+}
+
+############################
 # CLOUDWATCH DASHBOARD
 ############################
 
@@ -264,16 +332,47 @@ resource "aws_cloudwatch_dashboard" "sandeep_strapi" {
   dashboard_body = jsonencode({
     widgets = [
       {
-        type = "metric"
-        width = 12
-        height = 6
+        type = "metric",
+        width = 12,
+        height = 6,
         properties = {
-          title = "CPU & Memory"
-          region = var.aws_region
+          title = "CPU & Memory",
+          region = var.aws_region,
           metrics = [
             ["AWS/ECS", "CPUUtilization", "ClusterName", aws_ecs_cluster.sandeep_strapi.name, "ServiceName", aws_ecs_service.sandeep_strapi.name],
             ["AWS/ECS", "MemoryUtilization", "ClusterName", aws_ecs_cluster.sandeep_strapi.name, "ServiceName", aws_ecs_service.sandeep_strapi.name]
-          ]
+          ],
+          stat = "Average",
+          period = 60
+        }
+      },
+      {
+        type = "metric",
+        width = 12,
+        height = 6,
+        properties = {
+          title = "Task Count",
+          region = var.aws_region,
+          metrics = [
+            ["AWS/ECS", "RunningTaskCount", "ClusterName", aws_ecs_cluster.sandeep_strapi.name, "ServiceName", aws_ecs_service.sandeep_strapi.name]
+          ],
+          stat = "Average",
+          period = 60
+        }
+      },
+      {
+        type = "metric",
+        width = 12,
+        height = 6,
+        properties = {
+          title = "Network In / Out",
+          region = var.aws_region,
+          metrics = [
+            ["AWS/ECS", "NetworkRxBytes", "ClusterName", aws_ecs_cluster.sandeep_strapi.name, "ServiceName", aws_ecs_service.sandeep_strapi.name],
+            ["AWS/ECS", "NetworkTxBytes", "ClusterName", aws_ecs_cluster.sandeep_strapi.name, "ServiceName", aws_ecs_service.sandeep_strapi.name]
+          ],
+          stat = "Sum",
+          period = 60
         }
       }
     ]
