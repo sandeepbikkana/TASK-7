@@ -215,16 +215,23 @@ resource "aws_ecs_task_definition" "sandeep_strapi" {
         awslogs-stream-prefix = "ecs/sandeep-strapi"
       }
     }
+  environment = [
+  { name = "NODE_ENV", value = "production" },
 
-    environment = [
-      { name = "NODE_ENV", value = "production" },
-      { name = "DATABASE_CLIENT", value = "postgres" },
-      { name = "DATABASE_HOST", value = aws_db_instance.sandeep_strapi.address },
-      { name = "DATABASE_PORT", value = "5432" },
-      { name = "DATABASE_NAME", value = var.db_name },
-      { name = "DATABASE_USERNAME", value = var.db_username },
-      { name = "DATABASE_PASSWORD", value = var.db_password }
-    ]
+  { name = "APP_KEYS", value = var.app_keys },
+
+  { name = "ADMIN_JWT_SECRET", value = var.admin_jwt_secret },
+  { name = "JWT_SECRET", value = var.jwt_secret },
+  { name = "API_TOKEN_SALT", value = var.api_token_salt },
+
+  { name = "DATABASE_CLIENT", value = "postgres" },
+  { name = "DATABASE_HOST", value = aws_db_instance.sandeep_strapi.address },
+  { name = "DATABASE_PORT", value = "5432" },
+  { name = "DATABASE_NAME", value = var.db_name },
+  { name = "DATABASE_USERNAME", value = var.db_username },
+  { name = "DATABASE_PASSWORD", value = var.db_password }
+]
+   
   }])
 }
 
