@@ -10,10 +10,16 @@ data "aws_vpc" "default" {
   default = true
 }
 
-data "aws_subnets" "default" {
+# One subnet per AZ (required for ALB)
+data "aws_subnets" "alb" {
   filter {
     name   = "vpc-id"
     values = [data.aws_vpc.default.id]
+  }
+
+  filter {
+    name   = "default-for-az"
+    values = ["true"]
   }
 }
 
@@ -101,7 +107,7 @@ resource "aws_security_group" "sandeep_rds_sg" {
 
 resource "aws_db_subnet_group" "sandeep_strapi" {
   name       = "sandeep-strapi-db-subnet-group"
-  subnet_ids = data.aws_subnets.default.ids
+  subnet_ids = data.aws_subnets.alb.ids
 }
 
 resource "aws_db_instance" "sandeep_strapi" {
@@ -118,8 +124,8 @@ resource "aws_db_instance" "sandeep_strapi" {
   db_subnet_group_name   = aws_db_subnet_group.sandeep_strapi.name
   vpc_security_group_ids = [aws_security_group.sandeep_rds_sg.id]
 
-  publicly_accessible    = false
-  skip_final_snapshot    = true
+  publicly_accessible = false
+  skip_final_snapshot = true
 }
 
 ############################
@@ -130,7 +136,7 @@ resource "aws_lb" "sandeep_strapi" {
   name               = "sandeep-strapi-alb"
   load_balancer_type = "application"
   security_groups    = [aws_security_group.sandeep_alb_sg.id]
-  subnets            = data.aws_subnets.default.ids
+  subnets            = data.aws_subnets.alb.ids
 }
 
 resource "aws_lb_target_group" "sandeep_strapi" {
@@ -142,11 +148,11 @@ resource "aws_lb_target_group" "sandeep_strapi" {
 
   health_check {
     path                = "/admin"
+    matcher             = "200-399"
     interval            = 30
     timeout             = 5
     healthy_threshold   = 2
     unhealthy_threshold = 3
-    matcher             = "200-399"
   }
 }
 
@@ -196,13 +202,10 @@ resource "aws_ecs_task_definition" "sandeep_strapi" {
   execution_role_arn       = aws_iam_role.sandeep_ecs_execution_role.arn
 
   container_definitions = jsonencode([{
-    name      = "strapi"
-    image     = "${var.ecr_repo}:${var.image_tag}"
-    essential = true
+    name  = "strapi"
+    image = "${var.ecr_repo}:${var.image_tag}"
 
-    portMappings = [{
-      containerPort = 1337
-    }]
+    portMappings = [{ containerPort = 1337 }]
 
     logConfiguration = {
       logDriver = "awslogs"
@@ -220,11 +223,7 @@ resource "aws_ecs_task_definition" "sandeep_strapi" {
       { name = "DATABASE_PORT", value = "5432" },
       { name = "DATABASE_NAME", value = var.db_name },
       { name = "DATABASE_USERNAME", value = var.db_username },
-      { name = "DATABASE_PASSWORD", value = var.db_password },
-      { name = "APP_KEYS", value = var.app_keys },
-      { name = "ADMIN_JWT_SECRET", value = var.admin_jwt_secret },
-      { name = "JWT_SECRET", value = var.jwt_secret },
-      { name = "API_TOKEN_SALT", value = var.api_token_salt }
+      { name = "DATABASE_PASSWORD", value = var.db_password }
     ]
   }])
 }
@@ -241,7 +240,7 @@ resource "aws_ecs_service" "sandeep_strapi" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets          = data.aws_subnets.default.ids
+    subnets          = data.aws_subnets.alb.ids
     security_groups  = [aws_security_group.sandeep_ecs_sg.id]
     assign_public_ip = true
   }
@@ -253,74 +252,6 @@ resource "aws_ecs_service" "sandeep_strapi" {
   }
 
   depends_on = [aws_lb_listener.sandeep_http]
-}
-
-############################
-# CLOUDWATCH ALARMS
-############################
-
-resource "aws_cloudwatch_metric_alarm" "sandeep_high_cpu" {
-  alarm_name          = "sandeep-strapi-high-cpu"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/ECS"
-  period              = 60
-  statistic           = "Average"
-  threshold           = 80
-
-  dimensions = {
-    ClusterName = aws_ecs_cluster.sandeep_strapi.name
-    ServiceName = aws_ecs_service.sandeep_strapi.name
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "sandeep_high_memory" {
-  alarm_name          = "sandeep-strapi-high-memory"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
-  metric_name         = "MemoryUtilization"
-  namespace           = "AWS/ECS"
-  period              = 60
-  statistic           = "Average"
-  threshold           = 80
-
-  dimensions = {
-    ClusterName = aws_ecs_cluster.sandeep_strapi.name
-    ServiceName = aws_ecs_service.sandeep_strapi.name
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "sandeep_task_count_low" {
-  alarm_name          = "sandeep-strapi-task-count-low"
-  comparison_operator = "LessThanThreshold"
-  evaluation_periods  = 1
-  metric_name         = "RunningTaskCount"
-  namespace           = "AWS/ECS"
-  period              = 60
-  statistic           = "Average"
-  threshold           = 1
-
-  dimensions = {
-    ClusterName = aws_ecs_cluster.sandeep_strapi.name
-    ServiceName = aws_ecs_service.sandeep_strapi.name
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "sandeep_unhealthy_targets" {
-  alarm_name          = "sandeep-strapi-unhealthy-targets"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 1
-  metric_name         = "UnHealthyHostCount"
-  namespace           = "AWS/ApplicationELB"
-  period              = 60
-  statistic           = "Average"
-  threshold           = 0
-
-  dimensions = {
-    LoadBalancer = aws_lb.sandeep_strapi.arn_suffix
-    TargetGroup  = aws_lb_target_group.sandeep_strapi.arn_suffix
-  }
 }
 
 ############################
@@ -337,57 +268,12 @@ resource "aws_cloudwatch_dashboard" "sandeep_strapi" {
         width = 12
         height = 6
         properties = {
-          title = "Sandeep | ECS CPU & Memory"
+          title = "CPU & Memory"
           region = var.aws_region
           metrics = [
             ["AWS/ECS", "CPUUtilization", "ClusterName", aws_ecs_cluster.sandeep_strapi.name, "ServiceName", aws_ecs_service.sandeep_strapi.name],
             ["AWS/ECS", "MemoryUtilization", "ClusterName", aws_ecs_cluster.sandeep_strapi.name, "ServiceName", aws_ecs_service.sandeep_strapi.name]
           ]
-          stat = "Average"
-          period = 60
-        }
-      },
-      {
-        type = "metric"
-        width = 12
-        height = 6
-        properties = {
-          title = "Sandeep | Task Count"
-          region = var.aws_region
-          metrics = [
-            ["AWS/ECS", "RunningTaskCount", "ClusterName", aws_ecs_cluster.sandeep_strapi.name, "ServiceName", aws_ecs_service.sandeep_strapi.name]
-          ]
-          stat = "Average"
-          period = 60
-        }
-      },
-      {
-        type = "metric"
-        width = 12
-        height = 6
-        properties = {
-          title = "Sandeep | Network In / Out"
-          region = var.aws_region
-          metrics = [
-            ["AWS/ECS", "NetworkRxBytes", "ClusterName", aws_ecs_cluster.sandeep_strapi.name, "ServiceName", aws_ecs_service.sandeep_strapi.name],
-            ["AWS/ECS", "NetworkTxBytes", "ClusterName", aws_ecs_cluster.sandeep_strapi.name, "ServiceName", aws_ecs_service.sandeep_strapi.name]
-          ]
-          stat = "Sum"
-          period = 60
-        }
-      },
-      {
-        type = "metric"
-        width = 12
-        height = 6
-        properties = {
-          title = "Sandeep | ALB Response Time"
-          region = var.aws_region
-          metrics = [
-            ["AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", aws_lb.sandeep_strapi.arn_suffix]
-          ]
-          stat = "Average"
-          period = 60
         }
       }
     ]
