@@ -23,6 +23,11 @@ output "ecs_service_name" {
   value       = aws_ecs_service.sandeep_strapi.name
 }
 
+output "ecs_capacity_providers" {
+  description = "Capacity providers enabled on the ECS cluster"
+  value       = aws_ecs_cluster.sandeep_strapi.capacity_providers
+}
+
 output "cloudwatch_dashboard" {
   description = "CloudWatch dashboard name for Strapi ECS monitoring"
   value       = aws_cloudwatch_dashboard.sandeep_strapi.dashboard_name
