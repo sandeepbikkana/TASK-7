@@ -38,6 +38,7 @@ resource "aws_ecs_cluster" "sandeep_strapi" {
 # SECURITY GROUPS
 ############################
 
+# ALB
 resource "aws_security_group" "alb_sg" {
   name   = "sandeep-alb-sg"
   vpc_id = data.aws_vpc.default.id
@@ -57,16 +58,10 @@ resource "aws_security_group" "alb_sg" {
   }
 }
 
+# ECS
 resource "aws_security_group" "ecs_sg" {
   name   = "sandeep-ecs-sg"
   vpc_id = data.aws_vpc.default.id
-
-  ingress {
-    from_port       = 80
-    to_port         = 80
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb_sg.id]
-  }
 
   ingress {
     from_port       = 1337
@@ -83,6 +78,50 @@ resource "aws_security_group" "ecs_sg" {
   }
 }
 
+# RDS
+resource "aws_security_group" "rds_sg" {
+  name   = "sandeep-rds-sg"
+  vpc_id = data.aws_vpc.default.id
+
+  ingress {
+    from_port       = 5432
+    to_port         = 5432
+    protocol        = "tcp"
+    security_groups = [aws_security_group.ecs_sg.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+############################
+# RDS
+############################
+
+resource "aws_db_subnet_group" "sandeep" {
+  name       = "sandeep-db-subnet-group"
+  subnet_ids = data.aws_subnets.default.ids
+}
+
+resource "aws_db_instance" "sandeep" {
+  identifier             = "sandeep-strapi-postgres"
+  engine                 = "postgres"
+  engine_version         = "15.5"
+  instance_class         = "db.t3.micro"
+  allocated_storage      = 20
+  db_name                = var.db_name
+  username               = var.db_username
+  password               = var.db_password
+  db_subnet_group_name   = aws_db_subnet_group.sandeep.name
+  vpc_security_group_ids = [aws_security_group.rds_sg.id]
+  publicly_accessible    = false
+  skip_final_snapshot    = true
+}
+
 ############################
 # ALB
 ############################
@@ -96,14 +135,13 @@ resource "aws_lb" "strapi" {
 
 resource "aws_lb_target_group" "blue" {
   name        = "sandeep-blue"
-  port        = 80
+  port        = 1337
   protocol    = "HTTP"
   vpc_id      = data.aws_vpc.default.id
   target_type = "ip"
 
   health_check {
-    path    = "/"
-    matcher = "200-399"
+    path = "/"
   }
 }
 
@@ -115,8 +153,7 @@ resource "aws_lb_target_group" "green" {
   target_type = "ip"
 
   health_check {
-    path    = "/"
-    matcher = "200-399"
+    path = "/"
   }
 }
 
@@ -189,7 +226,7 @@ resource "aws_ecs_task_definition" "baseline" {
       image     = "public.ecr.aws/docker/library/nginx:latest"
       essential = true
       portMappings = [
-        { containerPort = 80 }
+        { containerPort = 1337 }
       ]
     }
   ])
@@ -222,7 +259,7 @@ resource "aws_ecs_service" "strapi" {
   load_balancer {
     target_group_arn = aws_lb_target_group.blue.arn
     container_name   = "strapi"
-    container_port   = 80
+    container_port   = 1337
   }
 }
 
@@ -266,5 +303,41 @@ resource "aws_codedeploy_deployment_group" "ecs" {
       target_group { name = aws_lb_target_group.blue.name }
       target_group { name = aws_lb_target_group.green.name }
     }
+  }
+}
+
+############################
+# CLOUDWATCH ALARMS
+############################
+
+resource "aws_cloudwatch_metric_alarm" "cpu_high" {
+  alarm_name          = "sandeep-strapi-high-cpu"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/ECS"
+  period              = 60
+  statistic           = "Average"
+  threshold           = 80
+
+  dimensions = {
+    ClusterName = aws_ecs_cluster.sandeep_strapi.name
+    ServiceName = aws_ecs_service.strapi.name
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "memory_high" {
+  alarm_name          = "sandeep-strapi-high-memory"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = 2
+  metric_name         = "MemoryUtilization"
+  namespace           = "AWS/ECS"
+  period              = 60
+  statistic           = "Average"
+  threshold           = 80
+
+  dimensions = {
+    ClusterName = aws_ecs_cluster.sandeep_strapi.name
+    ServiceName = aws_ecs_service.strapi.name
   }
 }
