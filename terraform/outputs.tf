@@ -13,8 +13,13 @@ output "ecs_service_name" {
   value       = aws_ecs_service.strapi.name
 }
 
-output "log_group" {
-  description = "CloudWatch Log Group for ECS logs"
+output "rds_endpoint" {
+  description = "RDS PostgreSQL endpoint"
+  value       = aws_db_instance.sandeep.address
+}
+
+output "cloudwatch_log_group" {
+  description = "CloudWatch Log Group for ECS"
   value       = aws_cloudwatch_log_group.sandeep_strapi.name
 }
 
