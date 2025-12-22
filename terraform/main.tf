@@ -315,7 +315,6 @@ resource "aws_codedeploy_deployment_group" "sandeep_strapi" {
     }
   }
 }
-
 ################################
 # CLOUDWATCH DASHBOARD
 ################################
@@ -335,8 +334,22 @@ resource "aws_cloudwatch_dashboard" "sandeep_strapi" {
           stat   = "Average"
           period = 60
           metrics = [
-            ["AWS/ECS", "CPUUtilization", "ClusterName", aws_ecs_cluster.sandeep_strapi.name, "ServiceName", aws_ecs_service.sandeep_strapi.name],
-            ["AWS/ECS", "MemoryUtilization", "ClusterName", aws_ecs_cluster.sandeep_strapi.name, "ServiceName", aws_ecs_service.sandeep_strapi.name]
+            [
+              "AWS/ECS",
+              "CPUUtilization",
+              "ClusterName",
+              aws_ecs_cluster.sandeep_strapi.name,
+              "ServiceName",
+              aws_ecs_service.sandeep_strapi.name
+            ],
+            [
+              "AWS/ECS",
+              "MemoryUtilization",
+              "ClusterName",
+              aws_ecs_cluster.sandeep_strapi.name,
+              "ServiceName",
+              aws_ecs_service.sandeep_strapi.name
+            ]
           ]
         }
       }
