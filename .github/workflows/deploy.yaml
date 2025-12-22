@@ -88,14 +88,14 @@ jobs:
                 { "name": "DATABASE_USERNAME", "value": "${{ secrets.DB_USERNAME }}" },
                 { "name": "DATABASE_PASSWORD", "value": "${{ secrets.DB_PASSWORD }}" }
               ],
-              "logConfiguration": {
-                "logDriver": "awslogs",
-                "options": {
-                  "awslogs-group": "$LOG_GROUP",
-                  "awslogs-region": "${{ secrets.AWS_REGION }}",
-                  "awslogs-stream-prefix": "ecs"
-                }
-              }
+              # "logConfiguration": {
+              #   "logDriver": "awslogs",
+              #   "options": {
+              #     "awslogs-group": "$LOG_GROUP",
+              #     "awslogs-region": "${{ secrets.AWS_REGION }}",
+              #     "awslogs-stream-prefix": "ecs"
+              #   }
+              # }
             }
           ]
           EOF
@@ -129,6 +129,7 @@ jobs:
             --application-name sandeep-strapi-codedeploy \
             --deployment-group-name sandeep-strapi-dg \
             --revision revisionType=AppSpecContent,appSpecContent="{content=$(cat appspec-final.yaml)}"
+
 
 
 
