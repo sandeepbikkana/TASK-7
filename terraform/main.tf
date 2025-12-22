@@ -47,10 +47,26 @@ resource "aws_security_group" "sandeep_alb_sg" {
   name   = "sandeep-strapi-alb-sg"
   vpc_id = data.aws_vpc.default.id
 
-  ingress { from_port = 80  to_port = 80  protocol = "tcp" cidr_blocks = ["0.0.0.0/0"] }
-  ingress { from_port = 443 to_port = 443 protocol = "tcp" cidr_blocks = ["0.0.0.0/0"] }
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 
-  egress  { from_port = 0 to_port = 0 protocol = "-1" cidr_blocks = ["0.0.0.0/0"] }
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 }
 
 resource "aws_security_group" "sandeep_ecs_sg" {
@@ -64,7 +80,12 @@ resource "aws_security_group" "sandeep_ecs_sg" {
     security_groups = [aws_security_group.sandeep_alb_sg.id]
   }
 
-  egress { from_port = 0 to_port = 0 protocol = "-1" cidr_blocks = ["0.0.0.0/0"] }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 }
 
 resource "aws_security_group" "sandeep_rds_sg" {
@@ -78,7 +99,12 @@ resource "aws_security_group" "sandeep_rds_sg" {
     security_groups = [aws_security_group.sandeep_ecs_sg.id]
   }
 
-  egress { from_port = 0 to_port = 0 protocol = "-1" cidr_blocks = ["0.0.0.0/0"] }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 }
 
 ################################
@@ -198,11 +224,17 @@ resource "aws_ecs_task_definition" "sandeep_strapi" {
   memory                   = "1024"
   execution_role_arn       = aws_iam_role.sandeep_ecs_execution_role.arn
 
-  container_definitions = jsonencode([{
-    name  = "strapi"
-    image = "placeholder"
-    portMappings = [{ containerPort = 1337 }]
-  }])
+  container_definitions = jsonencode([
+    {
+      name  = "strapi"
+      image = "placeholder"
+      portMappings = [
+        {
+          containerPort = 1337
+        }
+      ]
+    }
+  ])
 
   lifecycle {
     ignore_changes = [container_definitions]
@@ -238,7 +270,7 @@ resource "aws_ecs_service" "sandeep_strapi" {
 }
 
 ################################
-# CODEDEPLOY (BLUE / GREEN)
+# CODEDEPLOY BLUE/GREEN
 ################################
 
 resource "aws_codedeploy_app" "sandeep_strapi" {
@@ -280,8 +312,13 @@ resource "aws_codedeploy_deployment_group" "sandeep_strapi" {
         listener_arns = [aws_lb_listener.sandeep_http.arn]
       }
 
-      target_group { name = aws_lb_target_group.sandeep_blue.name }
-      target_group { name = aws_lb_target_group.sandeep_green.name }
+      target_group {
+        name = aws_lb_target_group.sandeep_blue.name
+      }
+
+      target_group {
+        name = aws_lb_target_group.sandeep_green.name
+      }
     }
   }
 }
@@ -341,8 +378,22 @@ resource "aws_cloudwatch_dashboard" "sandeep_strapi" {
           stat   = "Average"
           period = 60
           metrics = [
-            ["AWS/ECS", "CPUUtilization", "ClusterName", aws_ecs_cluster.sandeep_strapi.name, "ServiceName", aws_ecs_service.sandeep_strapi.name],
-            ["AWS/ECS", "MemoryUtilization", "ClusterName", aws_ecs_cluster.sandeep_strapi.name, "ServiceName", aws_ecs_service.sandeep_strapi.name]
+            [
+              "AWS/ECS",
+              "CPUUtilization",
+              "ClusterName",
+              aws_ecs_cluster.sandeep_strapi.name,
+              "ServiceName",
+              aws_ecs_service.sandeep_strapi.name
+            ],
+            [
+              "AWS/ECS",
+              "MemoryUtilization",
+              "ClusterName",
+              aws_ecs_cluster.sandeep_strapi.name,
+              "ServiceName",
+              aws_ecs_service.sandeep_strapi.name
+            ]
           ]
         }
       }
