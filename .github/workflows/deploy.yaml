@@ -29,22 +29,20 @@ jobs:
           aws-region:            ${{ secrets.AWS_REGION }}
 
       ################################
-      # Terraform Init (read outputs)
-      ################################
-      ################################
       # Setup Terraform
+      ################################
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.5.0
-      
-      # Terraform Init (read outputs)
+
+      ################################
+      # Terraform Init
       ################################
       - name: Terraform init
         working-directory: terraform
         run: terraform init -input=false
 
-      
       ################################
       # Fetch Terraform outputs
       ################################
@@ -52,16 +50,10 @@ jobs:
         working-directory: terraform
         run: |
           DB_HOST="$(terraform output -raw rds_endpoint | tr -d '\n')"
-          ###LOG_GROUP="$(terraform output -raw log_group | tr -d '\n')"
-      
-          {
-            echo "DB_HOST=$DB_HOST"
-            #echo "LOG_GROUP=$LOG_GROUP"
-          } >> "$GITHUB_ENV"
-      
+          echo "DB_HOST=$DB_HOST" >> "$GITHUB_ENV"
 
       ################################
-      # Generate container definition
+      # Generate container definition (NO LOGS)
       ################################
       - name: Generate container definition
         run: |
@@ -80,25 +72,22 @@ jobs:
                 { "name": "ADMIN_JWT_SECRET", "value": "${{ secrets.ADMIN_JWT_SECRET }}" },
                 { "name": "JWT_SECRET", "value": "${{ secrets.JWT_SECRET }}" },
                 { "name": "API_TOKEN_SALT", "value": "${{ secrets.API_TOKEN_SALT }}" },
-
                 { "name": "DATABASE_CLIENT", "value": "postgres" },
                 { "name": "DATABASE_HOST", "value": "$DB_HOST" },
                 { "name": "DATABASE_PORT", "value": "5432" },
                 { "name": "DATABASE_NAME", "value": "strapi" },
                 { "name": "DATABASE_USERNAME", "value": "${{ secrets.DB_USERNAME }}" },
                 { "name": "DATABASE_PASSWORD", "value": "${{ secrets.DB_PASSWORD }}" }
-              ],
-              # "logConfiguration": {
-              #   "logDriver": "awslogs",
-              #   "options": {
-              #     "awslogs-group": "$LOG_GROUP",
-              #     "awslogs-region": "${{ secrets.AWS_REGION }}",
-              #     "awslogs-stream-prefix": "ecs"
-              #   }
-              # }
+              ]
             }
           ]
           EOF
+
+      ################################
+      # Validate JSON (prevents silent failures)
+      ################################
+      - name: Validate container JSON
+        run: jq . container-def.json
 
       ################################
       # Register ECS Task Definition
@@ -112,11 +101,12 @@ jobs:
             --cpu "512" \
             --memory "1024" \
             --execution-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/sandeep-ecs-task-execution-role \
+            --task-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/sandeep-ecs-task-role \
             --container-definitions file://container-def.json \
             --query 'taskDefinition.taskDefinitionArn' \
             --output text)
 
-          echo "TASK_DEF_ARN=$TASK_DEF_ARN" >> $GITHUB_ENV
+          echo "TASK_DEF_ARN=$TASK_DEF_ARN" >> "$GITHUB_ENV"
 
       ################################
       # CodeDeploy Blue/Green Deployment
@@ -129,7 +119,4 @@ jobs:
             --application-name sandeep-strapi-codedeploy \
             --deployment-group-name sandeep-strapi-dg \
             --revision revisionType=AppSpecContent,appSpecContent="{content=$(cat appspec-final.yaml)}"
-
-
-
 
