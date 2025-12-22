@@ -108,7 +108,7 @@ resource "aws_security_group" "sandeep_rds_sg" {
 }
 
 ################################
-# RDS POSTGRES
+# RDS
 ################################
 
 resource "aws_db_subnet_group" "sandeep_strapi" {
@@ -135,7 +135,7 @@ resource "aws_db_instance" "sandeep_strapi" {
 }
 
 ################################
-# APPLICATION LOAD BALANCER
+# LOAD BALANCER + TARGET GROUPS
 ################################
 
 resource "aws_lb" "sandeep_strapi" {
@@ -228,11 +228,7 @@ resource "aws_ecs_task_definition" "sandeep_strapi" {
     {
       name  = "strapi"
       image = "placeholder"
-      portMappings = [
-        {
-          containerPort = 1337
-        }
-      ]
+      portMappings = [{ containerPort = 1337 }]
     }
   ])
 
@@ -270,7 +266,7 @@ resource "aws_ecs_service" "sandeep_strapi" {
 }
 
 ################################
-# CODEDEPLOY BLUE/GREEN
+# CODEDEPLOY
 ################################
 
 resource "aws_codedeploy_app" "sandeep_strapi" {
@@ -312,91 +308,8 @@ resource "aws_codedeploy_deployment_group" "sandeep_strapi" {
         listener_arns = [aws_lb_listener.sandeep_http.arn]
       }
 
-      target_group {
-        name = aws_lb_target_group.sandeep_blue.name
-      }
-
-      target_group {
-        name = aws_lb_target_group.sandeep_green.name
-      }
+      target_group { name = aws_lb_target_group.sandeep_blue.name }
+      target_group { name = aws_lb_target_group.sandeep_green.name }
     }
   }
-}
-
-################################
-# CLOUDWATCH ALARMS
-################################
-
-resource "aws_cloudwatch_metric_alarm" "sandeep_high_cpu" {
-  alarm_name          = "sandeep-strapi-high-cpu"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/ECS"
-  period              = 60
-  statistic           = "Average"
-  threshold           = 80
-
-  dimensions = {
-    ClusterName = aws_ecs_cluster.sandeep_strapi.name
-    ServiceName = aws_ecs_service.sandeep_strapi.name
-  }
-}
-
-resource "aws_cloudwatch_metric_alarm" "sandeep_high_memory" {
-  alarm_name          = "sandeep-strapi-high-memory"
-  comparison_operator = "GreaterThanThreshold"
-  evaluation_periods  = 2
-  metric_name         = "MemoryUtilization"
-  namespace           = "AWS/ECS"
-  period              = 60
-  statistic           = "Average"
-  threshold           = 80
-
-  dimensions = {
-    ClusterName = aws_ecs_cluster.sandeep_strapi.name
-    ServiceName = aws_ecs_service.sandeep_strapi.name
-  }
-}
-
-################################
-# CLOUDWATCH DASHBOARD
-################################
-
-resource "aws_cloudwatch_dashboard" "sandeep_strapi" {
-  dashboard_name = "sandeep-strapi-ecs-dashboard"
-
-  dashboard_body = jsonencode({
-    widgets = [
-      {
-        type   = "metric"
-        width  = 12
-        height = 6
-        properties = {
-          title  = "CPU & Memory"
-          region = var.aws_region
-          stat   = "Average"
-          period = 60
-          metrics = [
-            [
-              "AWS/ECS",
-              "CPUUtilization",
-              "ClusterName",
-              aws_ecs_cluster.sandeep_strapi.name,
-              "ServiceName",
-              aws_ecs_service.sandeep_strapi.name
-            ],
-            [
-              "AWS/ECS",
-              "MemoryUtilization",
-              "ClusterName",
-              aws_ecs_cluster.sandeep_strapi.name,
-              "ServiceName",
-              aws_ecs_service.sandeep_strapi.name
-            ]
-          ]
-        }
-      }
-    ]
-  })
 }
