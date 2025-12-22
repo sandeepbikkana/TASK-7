@@ -108,7 +108,7 @@ resource "aws_security_group" "sandeep_rds_sg" {
 }
 
 ################################
-# RDS
+# RDS POSTGRES
 ################################
 
 resource "aws_db_subnet_group" "sandeep_strapi" {
@@ -135,7 +135,7 @@ resource "aws_db_instance" "sandeep_strapi" {
 }
 
 ################################
-# LOAD BALANCER + TARGET GROUPS
+# APPLICATION LOAD BALANCER
 ################################
 
 resource "aws_lb" "sandeep_strapi" {
@@ -228,7 +228,9 @@ resource "aws_ecs_task_definition" "sandeep_strapi" {
     {
       name  = "strapi"
       image = "placeholder"
-      portMappings = [{ containerPort = 1337 }]
+      portMappings = [
+        { containerPort = 1337 }
+      ]
     }
   ])
 
@@ -266,7 +268,7 @@ resource "aws_ecs_service" "sandeep_strapi" {
 }
 
 ################################
-# CODEDEPLOY
+# CODEDEPLOY BLUE/GREEN
 ################################
 
 resource "aws_codedeploy_app" "sandeep_strapi" {
@@ -312,4 +314,32 @@ resource "aws_codedeploy_deployment_group" "sandeep_strapi" {
       target_group { name = aws_lb_target_group.sandeep_green.name }
     }
   }
+}
+
+################################
+# CLOUDWATCH DASHBOARD
+################################
+
+resource "aws_cloudwatch_dashboard" "sandeep_strapi" {
+  dashboard_name = "sandeep-strapi-ecs-dashboard"
+
+  dashboard_body = jsonencode({
+    widgets = [
+      {
+        type   = "metric"
+        width  = 12
+        height = 6
+        properties = {
+          title  = "CPU & Memory"
+          region = var.aws_region
+          stat   = "Average"
+          period = 60
+          metrics = [
+            ["AWS/ECS", "CPUUtilization", "ClusterName", aws_ecs_cluster.sandeep_strapi.name, "ServiceName", aws_ecs_service.sandeep_strapi.name],
+            ["AWS/ECS", "MemoryUtilization", "ClusterName", aws_ecs_cluster.sandeep_strapi.name, "ServiceName", aws_ecs_service.sandeep_strapi.name]
+          ]
+        }
+      }
+    ]
+  })
 }
