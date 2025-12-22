@@ -51,11 +51,14 @@ jobs:
       - name: Load Terraform outputs
         working-directory: terraform
         run: |
-          DB_HOST=$(terraform output -raw rds_endpoint)
-          LOG_GROUP=$(terraform output -raw log_group)
+          DB_HOST="$(terraform output -raw rds_endpoint | tr -d '\n')"
+          LOG_GROUP="$(terraform output -raw log_group | tr -d '\n')"
+      
+          {
+            echo "DB_HOST=$DB_HOST"
+            echo "LOG_GROUP=$LOG_GROUP"
+          } >> "$GITHUB_ENV"
 
-          echo "DB_HOST=$DB_HOST" >> $GITHUB_ENV
-          echo "LOG_GROUP=$LOG_GROUP" >> $GITHUB_ENV
 
       ################################
       # Generate container definition
@@ -126,4 +129,5 @@ jobs:
             --application-name sandeep-strapi-codedeploy \
             --deployment-group-name sandeep-strapi-dg \
             --revision revisionType=AppSpecContent,appSpecContent="{content=$(cat appspec-final.yaml)}"
+
 
