@@ -227,7 +227,7 @@ resource "aws_ecs_task_definition" "sandeep_strapi" {
   container_definitions = jsonencode([
     {
       name  = "strapi"
-      image = "${var.ecr_repo}:${var.image_tag}"
+      image = "public.ecr.aws/docker/library/nginx:latest"
       portMappings = [
         { containerPort = 1337 }
       ]
