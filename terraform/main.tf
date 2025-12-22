@@ -2,49 +2,44 @@ provider "aws" {
   region = var.aws_region
 }
 
-################################
-# VPC & SUBNETS
-################################
+############################
+# DATA
+############################
 
 data "aws_vpc" "default" {
   default = true
 }
 
-data "aws_subnets" "alb" {
+data "aws_subnets" "default" {
   filter {
     name   = "vpc-id"
     values = [data.aws_vpc.default.id]
   }
-
-  filter {
-    name   = "default-for-az"
-    values = ["true"]
-  }
 }
 
-################################
-# CLOUDWATCH LOG GROUP
-################################
+############################
+# CLOUDWATCH
+############################
 
 resource "aws_cloudwatch_log_group" "sandeep_strapi" {
   name              = "/ecs/sandeep-strapi"
   retention_in_days = 14
 }
 
-################################
+############################
 # ECS CLUSTER
-################################
+############################
 
 resource "aws_ecs_cluster" "sandeep_strapi" {
   name = "sandeep-strapi-cluster"
 }
 
-################################
+############################
 # SECURITY GROUPS
-################################
+############################
 
-resource "aws_security_group" "sandeep_alb_sg" {
-  name   = "sandeep-strapi-alb-sg"
+resource "aws_security_group" "alb_sg" {
+  name   = "sandeep-alb-sg"
   vpc_id = data.aws_vpc.default.id
 
   ingress {
@@ -54,13 +49,6 @@ resource "aws_security_group" "sandeep_alb_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
   egress {
     from_port   = 0
     to_port     = 0
@@ -69,15 +57,22 @@ resource "aws_security_group" "sandeep_alb_sg" {
   }
 }
 
-resource "aws_security_group" "sandeep_ecs_sg" {
-  name   = "sandeep-strapi-ecs-sg"
+resource "aws_security_group" "ecs_sg" {
+  name   = "sandeep-ecs-sg"
   vpc_id = data.aws_vpc.default.id
+
+  ingress {
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    security_groups = [aws_security_group.alb_sg.id]
+  }
 
   ingress {
     from_port       = 1337
     to_port         = 1337
     protocol        = "tcp"
-    security_groups = [aws_security_group.sandeep_alb_sg.id]
+    security_groups = [aws_security_group.alb_sg.id]
   }
 
   egress {
@@ -88,95 +83,59 @@ resource "aws_security_group" "sandeep_ecs_sg" {
   }
 }
 
-resource "aws_security_group" "sandeep_rds_sg" {
-  name   = "sandeep-strapi-rds-sg"
-  vpc_id = data.aws_vpc.default.id
+############################
+# ALB
+############################
 
-  ingress {
-    from_port       = 5432
-    to_port         = 5432
-    protocol        = "tcp"
-    security_groups = [aws_security_group.sandeep_ecs_sg.id]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-################################
-# RDS POSTGRES
-################################
-
-resource "aws_db_subnet_group" "sandeep_strapi" {
-  name       = "sandeep-strapi-db-subnet-group"
-  subnet_ids = data.aws_subnets.alb.ids
-}
-
-resource "aws_db_instance" "sandeep_strapi" {
-  identifier             = "sandeep-strapi-postgres"
-  engine                 = "postgres"
-  engine_version         = "15.15"
-  instance_class         = "db.t3.micro"
-  allocated_storage      = 20
-
-  db_name                = var.db_name
-  username               = var.db_username
-  password               = var.db_password
-
-  db_subnet_group_name   = aws_db_subnet_group.sandeep_strapi.name
-  vpc_security_group_ids = [aws_security_group.sandeep_rds_sg.id]
-
-  publicly_accessible = false
-  skip_final_snapshot = true
-}
-
-################################
-# APPLICATION LOAD BALANCER
-################################
-
-resource "aws_lb" "sandeep_strapi" {
+resource "aws_lb" "strapi" {
   name               = "sandeep-strapi-alb"
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.sandeep_alb_sg.id]
-  subnets            = data.aws_subnets.alb.ids
+  security_groups    = [aws_security_group.alb_sg.id]
+  subnets            = data.aws_subnets.default.ids
 }
 
-resource "aws_lb_target_group" "sandeep_blue" {
-  name        = "sandeep-strapi-blue-tg"
+resource "aws_lb_target_group" "blue" {
+  name        = "sandeep-blue"
+  port        = 80
+  protocol    = "HTTP"
+  vpc_id      = data.aws_vpc.default.id
+  target_type = "ip"
+
+  health_check {
+    path    = "/"
+    matcher = "200-399"
+  }
+}
+
+resource "aws_lb_target_group" "green" {
+  name        = "sandeep-green"
   port        = 1337
   protocol    = "HTTP"
   vpc_id      = data.aws_vpc.default.id
   target_type = "ip"
+
+  health_check {
+    path    = "/"
+    matcher = "200-399"
+  }
 }
 
-resource "aws_lb_target_group" "sandeep_green" {
-  name        = "sandeep-strapi-green-tg"
-  port        = 1337
-  protocol    = "HTTP"
-  vpc_id      = data.aws_vpc.default.id
-  target_type = "ip"
-}
-
-resource "aws_lb_listener" "sandeep_http" {
-  load_balancer_arn = aws_lb.sandeep_strapi.arn
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.strapi.arn
   port              = 80
   protocol          = "HTTP"
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.sandeep_blue.arn
+    target_group_arn = aws_lb_target_group.blue.arn
   }
 }
 
-################################
-# IAM ROLES
-################################
+############################
+# IAM
+############################
 
-resource "aws_iam_role" "sandeep_ecs_execution_role" {
+resource "aws_iam_role" "ecs_exec" {
   name = "sandeep-ecs-task-execution-role"
 
   assume_role_policy = jsonencode({
@@ -189,12 +148,12 @@ resource "aws_iam_role" "sandeep_ecs_execution_role" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "sandeep_ecs_policy" {
-  role       = aws_iam_role.sandeep_ecs_execution_role.name
+resource "aws_iam_role_policy_attachment" "ecs_exec_policy" {
+  role       = aws_iam_role.ecs_exec.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-resource "aws_iam_role" "sandeep_codedeploy_role" {
+resource "aws_iam_role" "codedeploy" {
   name = "sandeep-codedeploy-role"
 
   assume_role_policy = jsonencode({
@@ -207,29 +166,30 @@ resource "aws_iam_role" "sandeep_codedeploy_role" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "sandeep_codedeploy_policy" {
-  role       = aws_iam_role.sandeep_codedeploy_role.name
+resource "aws_iam_role_policy_attachment" "codedeploy_policy" {
+  role       = aws_iam_role.codedeploy.name
   policy_arn = "arn:aws:iam::aws:policy/AWSCodeDeployRoleForECS"
 }
 
-################################
-# ECS TASK DEFINITION (PLACEHOLDER)
-################################
+############################
+# TASK DEFINITION (BASELINE)
+############################
 
-resource "aws_ecs_task_definition" "sandeep_strapi" {
+resource "aws_ecs_task_definition" "baseline" {
   family                   = "sandeep-strapi-task"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = "512"
   memory                   = "1024"
-  execution_role_arn       = aws_iam_role.sandeep_ecs_execution_role.arn
+  execution_role_arn       = aws_iam_role.ecs_exec.arn
 
   container_definitions = jsonencode([
     {
-      name  = "strapi"
-      image = "public.ecr.aws/docker/library/nginx:latest"
+      name      = "strapi"
+      image     = "public.ecr.aws/docker/library/nginx:latest"
+      essential = true
       portMappings = [
-        { containerPort = 1337 }
+        { containerPort = 80 }
       ]
     }
   ])
@@ -239,47 +199,46 @@ resource "aws_ecs_task_definition" "sandeep_strapi" {
   }
 }
 
-################################
-# ECS SERVICE (CODEDEPLOY)
-################################
+############################
+# ECS SERVICE
+############################
 
-resource "aws_ecs_service" "sandeep_strapi" {
+resource "aws_ecs_service" "strapi" {
   name            = "sandeep-strapi-service"
   cluster         = aws_ecs_cluster.sandeep_strapi.id
-  task_definition = aws_ecs_task_definition.sandeep_strapi.arn
+  task_definition = aws_ecs_task_definition.baseline.arn
   desired_count   = 1
-  launch_type     = "FARGATE"
 
   deployment_controller {
     type = "CODE_DEPLOY"
   }
 
   network_configuration {
-    subnets          = data.aws_subnets.alb.ids
-    security_groups  = [aws_security_group.sandeep_ecs_sg.id]
+    subnets          = data.aws_subnets.default.ids
+    security_groups  = [aws_security_group.ecs_sg.id]
     assign_public_ip = true
   }
 
   load_balancer {
-    target_group_arn = aws_lb_target_group.sandeep_blue.arn
+    target_group_arn = aws_lb_target_group.blue.arn
     container_name   = "strapi"
-    container_port   = 1337
+    container_port   = 80
   }
 }
 
-################################
-# CODEDEPLOY BLUE/GREEN
-################################
+############################
+# CODEDEPLOY
+############################
 
-resource "aws_codedeploy_app" "sandeep_strapi" {
+resource "aws_codedeploy_app" "ecs" {
   name             = "sandeep-strapi-codedeploy"
   compute_platform = "ECS"
 }
 
-resource "aws_codedeploy_deployment_group" "sandeep_strapi" {
-  app_name              = aws_codedeploy_app.sandeep_strapi.name
+resource "aws_codedeploy_deployment_group" "ecs" {
+  app_name              = aws_codedeploy_app.ecs.name
   deployment_group_name = "sandeep-strapi-dg"
-  service_role_arn      = aws_iam_role.sandeep_codedeploy_role.arn
+  service_role_arn      = aws_iam_role.codedeploy.arn
 
   deployment_style {
     deployment_type   = "BLUE_GREEN"
@@ -288,71 +247,24 @@ resource "aws_codedeploy_deployment_group" "sandeep_strapi" {
 
   deployment_config_name = "CodeDeployDefault.ECSCanary10Percent5Minutes"
 
-  blue_green_deployment_config {
-    deployment_ready_option {
-      action_on_timeout = "CONTINUE_DEPLOYMENT"
-    }
-
-    terminate_blue_instances_on_deployment_success {
-      action                           = "TERMINATE"
-      termination_wait_time_in_minutes = 5
-    }
+  auto_rollback_configuration {
+    enabled = true
+    events  = ["DEPLOYMENT_FAILURE"]
   }
 
   ecs_service {
     cluster_name = aws_ecs_cluster.sandeep_strapi.name
-    service_name = aws_ecs_service.sandeep_strapi.name
+    service_name = aws_ecs_service.strapi.name
   }
 
   load_balancer_info {
     target_group_pair_info {
       prod_traffic_route {
-        listener_arns = [aws_lb_listener.sandeep_http.arn]
+        listener_arns = [aws_lb_listener.http.arn]
       }
 
-      target_group { name = aws_lb_target_group.sandeep_blue.name }
-      target_group { name = aws_lb_target_group.sandeep_green.name }
+      target_group { name = aws_lb_target_group.blue.name }
+      target_group { name = aws_lb_target_group.green.name }
     }
   }
-}
-################################
-# CLOUDWATCH DASHBOARD
-################################
-
-resource "aws_cloudwatch_dashboard" "sandeep_strapi" {
-  dashboard_name = "sandeep-strapi-ecs-dashboard"
-
-  dashboard_body = jsonencode({
-    widgets = [
-      {
-        type   = "metric"
-        width  = 12
-        height = 6
-        properties = {
-          title  = "CPU & Memory"
-          region = var.aws_region
-          stat   = "Average"
-          period = 60
-          metrics = [
-            [
-              "AWS/ECS",
-              "CPUUtilization",
-              "ClusterName",
-              aws_ecs_cluster.sandeep_strapi.name,
-              "ServiceName",
-              aws_ecs_service.sandeep_strapi.name
-            ],
-            [
-              "AWS/ECS",
-              "MemoryUtilization",
-              "ClusterName",
-              aws_ecs_cluster.sandeep_strapi.name,
-              "ServiceName",
-              aws_ecs_service.sandeep_strapi.name
-            ]
-          ]
-        }
-      }
-    ]
-  })
 }
