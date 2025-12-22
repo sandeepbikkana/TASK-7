@@ -12,15 +12,85 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      ################################
+      # Checkout
+      ################################
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-      - uses: aws-actions/configure-aws-credentials@v3
+      ################################
+      # AWS Credentials
+      ################################
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v3
         with:
           aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region:            ${{ secrets.AWS_REGION }}
 
-      - name: Register task definition
+      ################################
+      # Terraform Init (read outputs)
+      ################################
+      - name: Terraform init
+        working-directory: terraform
+        run: terraform init -input=false
+
+      ################################
+      # Fetch Terraform outputs
+      ################################
+      - name: Load Terraform outputs
+        working-directory: terraform
+        run: |
+          DB_HOST=$(terraform output -raw rds_endpoint)
+          LOG_GROUP=$(terraform output -raw log_group)
+
+          echo "DB_HOST=$DB_HOST" >> $GITHUB_ENV
+          echo "LOG_GROUP=$LOG_GROUP" >> $GITHUB_ENV
+
+      ################################
+      # Generate container definition
+      ################################
+      - name: Generate container definition
+        run: |
+          cat <<EOF > container-def.json
+          [
+            {
+              "name": "strapi",
+              "image": "${{ secrets.ECR_REPO }}:${{ github.event.inputs.image_tag }}",
+              "essential": true,
+              "portMappings": [
+                { "containerPort": 1337 }
+              ],
+              "environment": [
+                { "name": "NODE_ENV", "value": "production" },
+                { "name": "APP_KEYS", "value": "${{ secrets.APP_KEYS }}" },
+                { "name": "ADMIN_JWT_SECRET", "value": "${{ secrets.ADMIN_JWT_SECRET }}" },
+                { "name": "JWT_SECRET", "value": "${{ secrets.JWT_SECRET }}" },
+                { "name": "API_TOKEN_SALT", "value": "${{ secrets.API_TOKEN_SALT }}" },
+
+                { "name": "DATABASE_CLIENT", "value": "postgres" },
+                { "name": "DATABASE_HOST", "value": "$DB_HOST" },
+                { "name": "DATABASE_PORT", "value": "5432" },
+                { "name": "DATABASE_NAME", "value": "strapi" },
+                { "name": "DATABASE_USERNAME", "value": "${{ secrets.DB_USERNAME }}" },
+                { "name": "DATABASE_PASSWORD", "value": "${{ secrets.DB_PASSWORD }}" }
+              ],
+              "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                  "awslogs-group": "$LOG_GROUP",
+                  "awslogs-region": "${{ secrets.AWS_REGION }}",
+                  "awslogs-stream-prefix": "ecs"
+                }
+              }
+            }
+          ]
+          EOF
+
+      ################################
+      # Register ECS Task Definition
+      ################################
+      - name: Register ECS task definition
         run: |
           TASK_DEF_ARN=$(aws ecs register-task-definition \
             --family sandeep-strapi-task \
@@ -35,7 +105,10 @@ jobs:
 
           echo "TASK_DEF_ARN=$TASK_DEF_ARN" >> $GITHUB_ENV
 
-      - name: Create CodeDeploy deployment
+      ################################
+      # CodeDeploy Blue/Green Deployment
+      ################################
+      - name: Deploy using CodeDeploy
         run: |
           sed "s|<TASK_DEFINITION>|$TASK_DEF_ARN|g" appspec.yaml > appspec-final.yaml
 
