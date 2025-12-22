@@ -31,10 +31,20 @@ jobs:
       ################################
       # Terraform Init (read outputs)
       ################################
+      ################################
+      # Setup Terraform
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.0
+      
+      # Terraform Init (read outputs)
+      ################################
       - name: Terraform init
         working-directory: terraform
         run: terraform init -input=false
 
+      
       ################################
       # Fetch Terraform outputs
       ################################
@@ -116,3 +126,4 @@ jobs:
             --application-name sandeep-strapi-codedeploy \
             --deployment-group-name sandeep-strapi-dg \
             --revision revisionType=AppSpecContent,appSpecContent="{content=$(cat appspec-final.yaml)}"
+
