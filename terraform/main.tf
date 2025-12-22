@@ -294,6 +294,15 @@ resource "aws_ecs_service" "sandeep_strapi" {
 }
 
 ################################
+# CODEDEPLOY APPLICATION
+################################
+
+resource "aws_codedeploy_app" "sandeep_strapi" {
+  name             = "sandeep-strapi-codedeploy"
+  compute_platform = "ECS"
+}
+
+################################
 # CODEDEPLOY
 ################################
 
