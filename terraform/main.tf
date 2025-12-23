@@ -6,29 +6,35 @@ provider "aws" {
 }
 
 ################################
-# DATA: DEFAULT VPC + SUBNETS
+# DATA: DEFAULT VPC
 ################################
 data "aws_vpc" "default" {
   default = true
 }
 
-# data "aws_subnets" "default" {
-#   filter {
-#     name   = "vpc-id"
-#     values = [data.aws_vpc.default.id]
-#   }
-# }
-
-data "aws_subnets" "public" {
+################################
+# DATA: ALL SUBNETS (FOR RDS)
+################################
+data "aws_subnets" "all" {
   filter {
     name   = "vpc-id"
     values = [data.aws_vpc.default.id]
   }
+}
 
-  filter {
-    name   = "map-public-ip-on-launch"
-    values = ["true"]
-  }
+################################
+# DATA: ONE SUBNET PER AZ (FOR ALB + ECS)
+################################
+data "aws_subnet" "by_id" {
+  for_each = toset(data.aws_subnets.all.ids)
+  id       = each.value
+}
+
+locals {
+  alb_ecs_subnets = values({
+    for s in data.aws_subnet.by_id :
+    s.availability_zone => s.id
+  })
 }
 
 ################################
@@ -50,7 +56,7 @@ resource "aws_ecs_cluster" "strapi" {
 # SECURITY GROUPS
 ################################
 
-# ALB Security Group
+# ALB SG
 resource "aws_security_group" "alb_sg" {
   name   = "sandeep-strapi-alb-sg"
   vpc_id = data.aws_vpc.default.id
@@ -77,7 +83,7 @@ resource "aws_security_group" "alb_sg" {
   }
 }
 
-# ECS Security Group
+# ECS SG
 resource "aws_security_group" "ecs_sg" {
   name   = "sandeep-strapi-ecs-sg"
   vpc_id = data.aws_vpc.default.id
@@ -97,7 +103,7 @@ resource "aws_security_group" "ecs_sg" {
   }
 }
 
-# RDS Security Group
+# RDS SG
 resource "aws_security_group" "rds_sg" {
   name   = "sandeep-strapi-rds-sg"
   vpc_id = data.aws_vpc.default.id
@@ -118,11 +124,11 @@ resource "aws_security_group" "rds_sg" {
 }
 
 ################################
-# RDS POSTGRES
+# RDS (UNCHANGED SUBNET GROUP)
 ################################
 resource "aws_db_subnet_group" "strapi" {
   name       = "sandeep-strapi-db-subnets"
-  subnet_ids = data.aws_subnets.public.ids
+  subnet_ids = data.aws_subnets.all.ids
 }
 
 resource "aws_db_instance" "strapi" {
@@ -136,8 +142,8 @@ resource "aws_db_instance" "strapi" {
   username = var.db_username
   password = var.db_password
 
+  db_subnet_group_name   = aws_db_subnet_group.strapi.name
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
-  db_subnet_group_name  = aws_db_subnet_group.strapi.name
 
   publicly_accessible = false
   skip_final_snapshot = true
@@ -150,11 +156,11 @@ resource "aws_lb" "strapi" {
   name               = "sandeep-strapi-alb"
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_sg.id]
-  subnets            = data.aws_subnets.public.ids
+  subnets            = local.alb_ecs_subnets
 }
 
 ################################
-# TARGET GROUPS (BLUE / GREEN)
+# TARGET GROUPS
 ################################
 resource "aws_lb_target_group" "blue" {
   name        = "sandeep-strapi-blue"
@@ -236,7 +242,7 @@ resource "aws_iam_role_policy_attachment" "codedeploy_policy" {
 }
 
 ################################
-# BASELINE TASK DEFINITION (PLACEHOLDER)
+# TASK DEFINITION (PLACEHOLDER)
 ################################
 resource "aws_ecs_task_definition" "baseline" {
   family                   = "sandeep-strapi-task"
@@ -251,11 +257,7 @@ resource "aws_ecs_task_definition" "baseline" {
       name      = "strapi"
       image     = "PLACEHOLDER"
       essential = true
-
-      portMappings = [{
-        containerPort = 1337
-      }]
-
+      portMappings = [{ containerPort = 1337 }]
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -273,7 +275,7 @@ resource "aws_ecs_task_definition" "baseline" {
 }
 
 ################################
-# ECS SERVICE (CODEDEPLOY OWNED)
+# ECS SERVICE (CODEDEPLOY)
 ################################
 resource "aws_ecs_service" "strapi" {
   name            = "sandeep-strapi-service"
@@ -286,8 +288,8 @@ resource "aws_ecs_service" "strapi" {
   }
 
   network_configuration {
-    subnets          = data.aws_subnets.public.ids
-    security_groups  = [aws_security_group.ecs_sg.id]
+    subnets         = local.alb_ecs_subnets
+    security_groups = [aws_security_group.ecs_sg.id]
   }
 
   load_balancer {
@@ -295,6 +297,8 @@ resource "aws_ecs_service" "strapi" {
     container_name   = "strapi"
     container_port   = 1337
   }
+
+  depends_on = [aws_lb_listener.http]
 
   lifecycle {
     ignore_changes = [
@@ -307,7 +311,7 @@ resource "aws_ecs_service" "strapi" {
 }
 
 ################################
-# CODEDEPLOY (BLUE / GREEN)
+# CODEDEPLOY BLUE / GREEN
 ################################
 resource "aws_codedeploy_app" "ecs" {
   name             = "sandeep-strapi-codedeploy"
@@ -348,13 +352,8 @@ resource "aws_codedeploy_deployment_group" "ecs" {
         listener_arns = [aws_lb_listener.http.arn]
       }
 
-      target_group {
-        name = aws_lb_target_group.blue.name
-      }
-
-      target_group {
-        name = aws_lb_target_group.green.name
-      }
+      target_group { name = aws_lb_target_group.blue.name }
+      target_group { name = aws_lb_target_group.green.name }
     }
   }
 }
