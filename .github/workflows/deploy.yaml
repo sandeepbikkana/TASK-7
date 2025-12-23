@@ -11,74 +11,120 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
 
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      ECS_CLUSTER: sandeep-strapi-cluster
+      ECS_SERVICE: sandeep-strapi-service
+      ECS_TASK_FAMILY: sandeep-strapi-task
+      CODEDEPLOY_APP: sandeep-strapi-codedeploy
+      CODEDEPLOY_DG: sandeep-strapi-dg
+
     steps:
-      - uses: actions/checkout@v4
+    ################################
+    # Checkout
+    ################################
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - uses: aws-actions/configure-aws-credentials@v3
-        with:
-          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region:            ${{ secrets.AWS_REGION }}
+    ################################
+    # AWS Credentials
+    ################################
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v3
+      with:
+        aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region:            ${{ secrets.AWS_REGION }}
 
-      - uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: 1.5.0
+    ################################
+    # Terraform Init + Outputs
+    ################################
+    - name: Terraform init
+      working-directory: terraform
+      run: terraform init -input=false
 
-      - name: Terraform init
-        working-directory: terraform
-        run: terraform init -input=false
+    - name: Load Terraform outputs
+      working-directory: terraform
+      run: |
+        echo "DB_HOST=$(terraform output -raw rds_endpoint | tr -d '\n')" >> $GITHUB_ENV
 
-      - name: Load Terraform outputs
-        working-directory: terraform
-        shell: bash
-        run: |
-          DB_HOST="$(terraform output -raw rds_endpoint | tr -d '\n')"
-          echo "DB_HOST=$DB_HOST" >> "$GITHUB_ENV"
+    ################################
+    # Generate container definition
+    ################################
+    - name: Generate container definition
+      run: |
+        cat > container-def.json <<EOF
+        [
+          {
+            "name": "strapi",
+            "image": "${{ secrets.ECR_REPO }}:${{ github.event.inputs.image_tag }}",
+            "essential": true,
+            "portMappings": [
+              { "containerPort": 1337 }
+            ],
+            "logConfiguration": {
+              "logDriver": "awslogs",
+              "options": {
+                "awslogs-group": "/ecs/sandeep-strapi",
+                "awslogs-region": "${{ secrets.AWS_REGION }}",
+                "awslogs-stream-prefix": "ecs"
+              }
+            },
+            "environment": [
+              { "name": "NODE_ENV", "value": "production" },
+              { "name": "DATABASE_CLIENT", "value": "postgres" },
+              { "name": "DATABASE_HOST", "value": "$DB_HOST" },
+              { "name": "DATABASE_PORT", "value": "5432" },
+              { "name": "DATABASE_NAME", "value": "strapi" },
+              { "name": "DATABASE_USERNAME", "value": "${{ secrets.DB_USERNAME }}" },
+              { "name": "DATABASE_PASSWORD", "value": "${{ secrets.DB_PASSWORD }}" },
+              { "name": "APP_KEYS", "value": "${{ secrets.APP_KEYS }}" },
+              { "name": "ADMIN_JWT_SECRET", "value": "${{ secrets.ADMIN_JWT_SECRET }}" },
+              { "name": "JWT_SECRET", "value": "${{ secrets.JWT_SECRET }}" },
+              { "name": "API_TOKEN_SALT", "value": "${{ secrets.API_TOKEN_SALT }}" }
+            ]
+          }
+        ]
+        EOF
 
-      - name: Create container definition
-        run: |
-          cat <<EOF > container-def.json
-          [
-            {
-              "name": "strapi",
-              "image": "${{ secrets.ECR_REPO }}:${{ github.event.inputs.image_tag }}",
-              "essential": true,
-              "portMappings": [{ "containerPort": 1337 }],
-              "environment": [
-                { "name": "NODE_ENV", "value": "production" },
-                { "name": "DATABASE_CLIENT", "value": "postgres" },
-                { "name": "DATABASE_HOST", "value": "$DB_HOST" },
-                { "name": "DATABASE_PORT", "value": "5432" },
-                { "name": "DATABASE_NAME", "value": "strapi" },
-                { "name": "DATABASE_USERNAME", "value": "${{ secrets.DB_USERNAME }}" },
-                { "name": "DATABASE_PASSWORD", "value": "${{ secrets.DB_PASSWORD }}" }
-              ]
-            }
-          ]
-          EOF
+    ################################
+    # Validate JSON
+    ################################
+    - name: Validate container definition
+      run: jq . container-def.json
 
-      - name: Register task definition
-        run: |
-          TASK_DEF=$(aws ecs register-task-definition \
-            --family sandeep-strapi-task \
-            --requires-compatibilities FARGATE \
-            --network-mode awsvpc \
-            --cpu 512 \
-            --memory 1024 \
-            --execution-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/sandeep-ecs-task-execution-role \
-            --container-definitions file://container-def.json \
-            --query 'taskDefinition.taskDefinitionArn' \
-            --output text)
-          echo "TASK_DEF=$TASK_DEF" >> $GITHUB_ENV
+    ################################
+    # Register ECS Task Definition
+    ################################
+    - name: Register ECS task definition
+      id: register
+      run: |
+        TASK_DEF_ARN=$(aws ecs register-task-definition \
+          --family $ECS_TASK_FAMILY \
+          --network-mode awsvpc \
+          --requires-compatibilities FARGATE \
+          --cpu 512 \
+          --memory 1024 \
+          --execution-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/sandeep-ecs-task-execution-role \
+          --container-definitions file://container-def.json \
+          --query 'taskDefinition.taskDefinitionArn' \
+          --output text)
 
-      - name: Deploy via CodeDeploy
-        run: |
-          sed "s|<TASK_DEFINITION>|$TASK_DEF|g" appspec.yaml > appspec-final.yaml
-          aws deploy create-deployment \
-            --application-name sandeep-strapi-codedeploy \
-            --deployment-group-name sandeep-strapi-dg \
-            --revision revisionType=AppSpecContent,appSpecContent="{content=$(cat appspec-final.yaml)}"
+        echo "TASK_DEF_ARN=$TASK_DEF_ARN" >> $GITHUB_ENV
 
+    ################################
+    # Prepare AppSpec
+    ################################
+    - name: Prepare AppSpec
+      run: |
+        sed "s|<TASK_DEFINITION>|$TASK_DEF_ARN|g" appspec.yaml > appspec-final.yaml
 
-
-
+    ################################
+    # Deploy using CodeDeploy
+    ################################
+    - name: Create CodeDeploy deployment
+      run: |
+        aws deploy create-deployment \
+          --application-name $CODEDEPLOY_APP \
+          --deployment-group-name $CODEDEPLOY_DG \
+          --revision "revisionType=AppSpecContent,appSpecContent={content=$(cat appspec-final.yaml)}"
