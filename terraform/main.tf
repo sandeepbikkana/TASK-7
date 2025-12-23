@@ -3,7 +3,7 @@ provider "aws" {
 }
 
 ################################
-# DATA: VPC & SUBNETS
+# DATA: DEFAULT VPC + ONE SUBNET PER AZ
 ################################
 
 data "aws_vpc" "default" {
@@ -101,18 +101,18 @@ resource "aws_security_group" "sandeep_rds_sg" {
 }
 
 ################################
-# RDS POSTGRES
+# RDS POSTGRES (SUPPORTED VERSION)
 ################################
 
-resource "aws_db_subnet_group" "sandeep" {
-  name       = "sandeep-db-subnets"
+resource "aws_db_subnet_group" "sandeep_strapi" {
+  name       = "sandeep-strapi-db-subnets"
   subnet_ids = data.aws_subnets.alb.ids
 }
 
-resource "aws_db_instance" "sandeep" {
+resource "aws_db_instance" "sandeep_strapi" {
   identifier        = "sandeep-strapi-postgres"
   engine            = "postgres"
-  engine_version    = "15.15"
+  engine_version    = "15.3"
   instance_class    = "db.t3.micro"
   allocated_storage = 20
 
@@ -120,7 +120,7 @@ resource "aws_db_instance" "sandeep" {
   username = var.db_username
   password = var.db_password
 
-  db_subnet_group_name   = aws_db_subnet_group.sandeep.name
+  db_subnet_group_name   = aws_db_subnet_group.sandeep_strapi.name
   vpc_security_group_ids = [aws_security_group.sandeep_rds_sg.id]
 
   publicly_accessible = false
@@ -139,7 +139,7 @@ resource "aws_lb" "sandeep_strapi" {
 }
 
 resource "aws_lb_target_group" "sandeep_blue" {
-  name        = "sandeep-blue"
+  name        = "sandeep-strapi-blue"
   port        = 1337
   protocol    = "HTTP"
   vpc_id      = data.aws_vpc.default.id
@@ -151,7 +151,7 @@ resource "aws_lb_target_group" "sandeep_blue" {
 }
 
 resource "aws_lb_target_group" "sandeep_green" {
-  name        = "sandeep-green"
+  name        = "sandeep-strapi-green"
   port        = 1337
   protocol    = "HTTP"
   vpc_id      = data.aws_vpc.default.id
@@ -173,7 +173,7 @@ resource "aws_lb_listener" "sandeep_http" {
 # IAM ROLES
 ################################
 
-resource "aws_iam_role" "sandeep_ecs_exec" {
+resource "aws_iam_role" "sandeep_ecs_execution_role" {
   name = "sandeep-ecs-task-execution-role"
 
   assume_role_policy = jsonencode({
@@ -186,12 +186,12 @@ resource "aws_iam_role" "sandeep_ecs_exec" {
   })
 }
 
-resource "aws_iam_role_policy_attachment" "sandeep_ecs_exec_policy" {
-  role       = aws_iam_role.sandeep_ecs_exec.name
+resource "aws_iam_role_policy_attachment" "sandeep_ecs_execution_policy" {
+  role       = aws_iam_role.sandeep_ecs_execution_role.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-resource "aws_iam_role" "sandeep_codedeploy" {
+resource "aws_iam_role" "sandeep_codedeploy_role" {
   name = "sandeep-codedeploy-role"
 
   assume_role_policy = jsonencode({
@@ -205,30 +205,28 @@ resource "aws_iam_role" "sandeep_codedeploy" {
 }
 
 resource "aws_iam_role_policy_attachment" "sandeep_codedeploy_policy" {
-  role       = aws_iam_role.sandeep_codedeploy.name
+  role       = aws_iam_role.sandeep_codedeploy_role.name
   policy_arn = "arn:aws:iam::aws:policy/AWSCodeDeployRoleForECS"
 }
 
 ################################
-# ECS TASK DEFINITION (PLACEHOLDER)
+# BASELINE ECS TASK DEFINITION
 ################################
 
-resource "aws_ecs_task_definition" "sandeep_baseline" {
+resource "aws_ecs_task_definition" "sandeep_strapi" {
   family                   = "sandeep-strapi-task"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = "512"
   memory                   = "1024"
-  execution_role_arn       = aws_iam_role.sandeep_ecs_exec.arn
+  execution_role_arn       = aws_iam_role.sandeep_ecs_execution_role.arn
 
   container_definitions = jsonencode([
     {
       name      = "strapi"
       image     = "public.ecr.aws/docker/library/nginx:latest"
       essential = true
-      portMappings = [
-        { containerPort = 1337 }
-      ]
+      portMappings = [{ containerPort = 1337 }]
     }
   ])
 
@@ -244,7 +242,7 @@ resource "aws_ecs_task_definition" "sandeep_baseline" {
 resource "aws_ecs_service" "sandeep_strapi" {
   name            = "sandeep-strapi-service"
   cluster         = aws_ecs_cluster.sandeep_strapi.id
-  task_definition = aws_ecs_task_definition.sandeep_baseline.arn
+  task_definition = aws_ecs_task_definition.sandeep_strapi.arn
   desired_count   = 1
 
   deployment_controller {
@@ -252,8 +250,8 @@ resource "aws_ecs_service" "sandeep_strapi" {
   }
 
   network_configuration {
-    subnets          = data.aws_subnets.alb.ids
-    security_groups  = [aws_security_group.sandeep_ecs_sg.id]
+    subnets         = data.aws_subnets.alb.ids
+    security_groups = [aws_security_group.sandeep_ecs_sg.id]
     assign_public_ip = false
   }
 
@@ -265,13 +263,18 @@ resource "aws_ecs_service" "sandeep_strapi" {
 }
 
 ################################
-# CODEDEPLOY
+# CODEDEPLOY BLUE/GREEN
 ################################
 
-resource "aws_codedeploy_deployment_group" "sandeep" {
-  app_name              = aws_codedeploy_app.sandeep.name
+resource "aws_codedeploy_app" "sandeep_strapi" {
+  name             = "sandeep-strapi-codedeploy"
+  compute_platform = "ECS"
+}
+
+resource "aws_codedeploy_deployment_group" "sandeep_strapi" {
+  app_name              = aws_codedeploy_app.sandeep_strapi.name
   deployment_group_name = "sandeep-strapi-dg"
-  service_role_arn      = data.aws_iam_role.codedeploy.arn
+  service_role_arn      = aws_iam_role.sandeep_codedeploy_role.arn
 
   deployment_style {
     deployment_type   = "BLUE_GREEN"
@@ -297,23 +300,18 @@ resource "aws_codedeploy_deployment_group" "sandeep" {
   }
 
   ecs_service {
-    cluster_name = aws_ecs_cluster.sandeep.name
-    service_name = aws_ecs_service.sandeep.name
+    cluster_name = aws_ecs_cluster.sandeep_strapi.name
+    service_name = aws_ecs_service.sandeep_strapi.name
   }
 
   load_balancer_info {
     target_group_pair_info {
       prod_traffic_route {
-        listener_arns = [aws_lb_listener.http.arn]
+        listener_arns = [aws_lb_listener.sandeep_http.arn]
       }
 
-      target_group {
-        name = aws_lb_target_group.blue.name
-      }
-
-      target_group {
-        name = aws_lb_target_group.green.name
-      }
+      target_group { name = aws_lb_target_group.sandeep_blue.name }
+      target_group { name = aws_lb_target_group.sandeep_green.name }
     }
   }
 }
@@ -322,7 +320,7 @@ resource "aws_codedeploy_deployment_group" "sandeep" {
 # CLOUDWATCH ALARMS
 ################################
 
-resource "aws_cloudwatch_metric_alarm" "cpu_high" {
+resource "aws_cloudwatch_metric_alarm" "sandeep_high_cpu" {
   alarm_name          = "sandeep-strapi-high-cpu"
   metric_name         = "CPUUtilization"
   namespace           = "AWS/ECS"
@@ -338,7 +336,7 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   }
 }
 
-resource "aws_cloudwatch_metric_alarm" "memory_high" {
+resource "aws_cloudwatch_metric_alarm" "sandeep_high_memory" {
   alarm_name          = "sandeep-strapi-high-memory"
   metric_name         = "MemoryUtilization"
   namespace           = "AWS/ECS"
@@ -358,7 +356,7 @@ resource "aws_cloudwatch_metric_alarm" "memory_high" {
 # CLOUDWATCH DASHBOARD
 ################################
 
-resource "aws_cloudwatch_dashboard" "sandeep" {
+resource "aws_cloudwatch_dashboard" "sandeep_strapi" {
   dashboard_name = "sandeep-strapi-dashboard"
 
   dashboard_body = jsonencode({
@@ -368,7 +366,7 @@ resource "aws_cloudwatch_dashboard" "sandeep" {
         width = 12
         height = 6
         properties = {
-          title = "CPU & Memory"
+          title = "ECS CPU & Memory"
           region = var.aws_region
           metrics = [
             ["AWS/ECS","CPUUtilization","ClusterName",aws_ecs_cluster.sandeep_strapi.name,"ServiceName",aws_ecs_service.sandeep_strapi.name],
