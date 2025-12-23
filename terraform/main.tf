@@ -280,6 +280,9 @@ resource "aws_ecs_task_definition" "baseline" {
 ################################
 # ECS SERVICE (CODEDEPLOY)
 ################################
+################################
+# ECS SERVICE (CODEDEPLOY – FINAL)
+################################
 resource "aws_ecs_service" "strapi" {
   name            = "sandeep-strapi-service"
   cluster         = aws_ecs_cluster.strapi.id
@@ -291,11 +294,9 @@ resource "aws_ecs_service" "strapi" {
   }
 
   capacity_provider_strategy {
-  capacity_provider = "FARGATE"
-  weight            = 1
+    capacity_provider = "FARGATE"
+    weight            = 1
   }
-
-  force_new_deployment = true
 
   network_configuration {
     subnets         = local.alb_ecs_subnets
