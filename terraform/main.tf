@@ -31,11 +31,14 @@ data "aws_subnet" "by_id" {
 }
 
 locals {
-  alb_ecs_subnets = values({
-    for s in data.aws_subnet.by_id :
-    s.availability_zone => s.id
-  })
+  alb_ecs_subnets = [
+    for az, subnets in {
+      for s in data.aws_subnet.by_id :
+      s.availability_zone => s.id...
+    } : subnets[0]
+  ]
 }
+
 
 ################################
 # CLOUDWATCH LOG GROUP
