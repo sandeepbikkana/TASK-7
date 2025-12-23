@@ -256,6 +256,8 @@ resource "aws_ecs_task_definition" "sandeep_strapi" {
 # ECS SERVICE (CODEDEPLOY)
 ################################
 
+
+
 resource "aws_ecs_service" "sandeep_strapi" {
   name            = "sandeep-strapi-service"
   cluster         = aws_ecs_cluster.sandeep_strapi.id
@@ -265,7 +267,8 @@ resource "aws_ecs_service" "sandeep_strapi" {
   deployment_controller {
     type = "CODE_DEPLOY"
   }
-
+  force_new_deployment = true
+  
   capacity_provider_strategy {
   capacity_provider = "FARGATE"
   weight            = 1
