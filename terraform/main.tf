@@ -39,6 +39,17 @@ resource "aws_ecs_cluster" "sandeep_strapi" {
   name = "sandeep-strapi-cluster"
 }
 
+resource "aws_ecs_cluster_capacity_providers" "sandeep_strapi" {
+  cluster_name = aws_ecs_cluster.sandeep_strapi.name
+
+  capacity_providers = ["FARGATE", "FARGATE_SPOT"]
+
+  default_capacity_provider_strategy {
+    capacity_provider = "FARGATE"
+    weight            = 1
+  }
+}
+
 ############################
 # SECURITY GROUPS
 ############################
@@ -263,21 +274,15 @@ resource "aws_ecs_task_definition" "sandeep_strapi" {
 ############################
 # ECS SERVICE (CODEDEPLOY)
 ############################
-
 resource "aws_ecs_service" "sandeep_strapi" {
-  name            = "sandeep-strapi-service"
-  cluster         = aws_ecs_cluster.sandeep_strapi.id
+  name    = "sandeep-strapi-service"
+  cluster = aws_ecs_cluster.sandeep_strapi.id
+
   task_definition = aws_ecs_task_definition.sandeep_strapi.arn
   desired_count   = 1
 
   deployment_controller {
     type = "CODE_DEPLOY"
-  }
-
-  network_configuration {
-    subnets          = data.aws_subnets.default.ids
-    security_groups  = [aws_security_group.sandeep_ecs_sg.id]
-    assign_public_ip = true
   }
 
   load_balancer {
@@ -286,12 +291,19 @@ resource "aws_ecs_service" "sandeep_strapi" {
     container_port   = 1337
   }
 
+  network_configuration {
+    subnets          = data.aws_subnets.alb.ids
+    security_groups  = [aws_security_group.sandeep_ecs_sg.id]
+    assign_public_ip = true
+  }
+
   lifecycle {
     ignore_changes = [
       task_definition,
       desired_count,
       network_configuration,
-      load_balancer
+      load_balancer,
+      capacity_provider_strategy
     ]
   }
 }
