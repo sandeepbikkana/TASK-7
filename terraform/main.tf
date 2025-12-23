@@ -6,15 +6,17 @@ provider "aws" {
 }
 
 ################################
-# DATA: DEFAULT VPC
+# VPC
 ################################
 data "aws_vpc" "default" {
   default = true
 }
 
 ################################
-# DATA: ALL SUBNETS (FOR RDS)
+# SUBNET DISCOVERY
 ################################
+
+# All subnets (for RDS – do NOT change later)
 data "aws_subnets" "all" {
   filter {
     name   = "vpc-id"
@@ -22,19 +24,20 @@ data "aws_subnets" "all" {
   }
 }
 
-################################
-# DATA: ONE SUBNET PER AZ (FOR ALB + ECS)
-################################
+# Fetch subnet details
 data "aws_subnet" "by_id" {
   for_each = toset(data.aws_subnets.all.ids)
   id       = each.value
 }
 
+# One subnet per AZ (for ALB + ECS)
 locals {
-  alb_ecs_subnets = values({
-    for s in data.aws_subnet.by_id :
-    s.availability_zone => s.id
-  })
+  alb_ecs_subnets = [
+    for az, subnet_ids in {
+      for s in data.aws_subnet.by_id :
+      s.availability_zone => s.id...
+    } : subnet_ids[0]
+  ]
 }
 
 ################################
@@ -124,7 +127,7 @@ resource "aws_security_group" "rds_sg" {
 }
 
 ################################
-# RDS (UNCHANGED SUBNET GROUP)
+# RDS (DO NOT CHANGE SUBNET GROUP)
 ################################
 resource "aws_db_subnet_group" "strapi" {
   name       = "sandeep-strapi-db-subnets"
@@ -189,7 +192,7 @@ resource "aws_lb_target_group" "green" {
 }
 
 ################################
-# ALB LISTENER
+# LISTENER
 ################################
 resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.strapi.arn
@@ -311,7 +314,7 @@ resource "aws_ecs_service" "strapi" {
 }
 
 ################################
-# CODEDEPLOY BLUE / GREEN
+# CODEDEPLOY BLUE/GREEN
 ################################
 resource "aws_codedeploy_app" "ecs" {
   name             = "sandeep-strapi-codedeploy"
@@ -334,18 +337,18 @@ resource "aws_codedeploy_deployment_group" "ecs" {
     enabled = true
     events  = ["DEPLOYMENT_FAILURE"]
   }
-  
- blue_green_deployment_config {
 
-  deployment_ready_option {
-    action_on_timeout = "CONTINUE_DEPLOYMENT"
+  blue_green_deployment_config {
+
+    deployment_ready_option {
+      action_on_timeout = "CONTINUE_DEPLOYMENT"
+    }
+
+    terminate_blue_instances_on_deployment_success {
+      action = "TERMINATE"
+    }
   }
 
-  terminate_blue_instances_on_deployment_success {
-    action = "TERMINATE"
-  }
-}
-  
   ecs_service {
     cluster_name = aws_ecs_cluster.strapi.name
     service_name = aws_ecs_service.strapi.name
