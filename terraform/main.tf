@@ -239,7 +239,6 @@ resource "aws_iam_role_policy_attachment" "codedeploy_policy" {
 ############################
 # PLACEHOLDER TASK DEFINITION
 ############################
-
 resource "aws_ecs_task_definition" "sandeep_strapi" {
   family                   = "sandeep-strapi-task"
   requires_compatibilities = ["FARGATE"]
@@ -251,14 +250,19 @@ resource "aws_ecs_task_definition" "sandeep_strapi" {
   container_definitions = jsonencode([
     {
       name      = "strapi"
-      image     = "public.ecr.aws/docker/library/nginx:latest"
+      image     = "PLACEHOLDER"
       essential = true
-      portMappings = [{ containerPort = 1337 }]
+
+      portMappings = [
+        {
+          containerPort = 1337
+        }
+      ]
 
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          awslogs-group         = aws_cloudwatch_log_group.sandeep_strapi.name
+          awslogs-group         = "/ecs/sandeep-strapi"
           awslogs-region        = var.aws_region
           awslogs-stream-prefix = "ecs"
         }
