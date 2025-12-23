@@ -1,55 +1,32 @@
 ################################
 # GENERAL
 ################################
-
 output "aws_region" {
-  description = "AWS region"
+  description = "AWS region where resources are deployed"
   value       = var.aws_region
-}
-
-output "vpc_id" {
-  description = "Default VPC ID"
-  value       = data.aws_vpc.default.id
-}
-
-################################
-# ECS
-################################
-
-output "ecs_cluster_name" {
-  description = "ECS cluster name"
-  value       = aws_ecs_cluster.sandeep_strapi.name
-}
-
-output "ecs_service_name" {
-  description = "ECS service name"
-  value       = aws_ecs_service.strapi.name
-}
-
-output "ecs_task_family" {
-  description = "ECS task definition family"
-  value       = aws_ecs_task_definition.baseline.family
 }
 
 ################################
 # LOAD BALANCER
 ################################
-
 output "alb_name" {
   description = "Application Load Balancer name"
   value       = aws_lb.strapi.name
 }
 
+output "alb_arn" {
+  description = "Application Load Balancer ARN"
+  value       = aws_lb.strapi.arn
+}
+
 output "alb_dns_name" {
-  description = "Application Load Balancer DNS name"
+  description = "Public DNS name of the ALB (use this to access Strapi)"
   value       = aws_lb.strapi.dns_name
 }
 
-output "alb_listener_arn" {
-  description = "ALB HTTP listener ARN"
-  value       = aws_lb_listener.http.arn
-}
-
+################################
+# TARGET GROUPS
+################################
 output "blue_target_group_arn" {
   description = "Blue target group ARN"
   value       = aws_lb_target_group.blue.arn
@@ -61,11 +38,28 @@ output "green_target_group_arn" {
 }
 
 ################################
+# ECS
+################################
+output "ecs_cluster_name" {
+  description = "ECS cluster name"
+  value       = aws_ecs_cluster.strapi.name
+}
+
+output "ecs_service_name" {
+  description = "ECS service name managed by CodeDeploy"
+  value       = aws_ecs_service.strapi.name
+}
+
+output "ecs_task_definition_family" {
+  description = "ECS task definition family (used by CI/CD when registering new revisions)"
+  value       = aws_ecs_task_definition.baseline.family
+}
+
+################################
 # CODEDEPLOY
 ################################
-
 output "codedeploy_application_name" {
-  description = "CodeDeploy application name"
+  description = "CodeDeploy ECS application name"
   value       = aws_codedeploy_app.ecs.name
 }
 
@@ -77,10 +71,14 @@ output "codedeploy_deployment_group_name" {
 ################################
 # RDS
 ################################
-
 output "rds_endpoint" {
   description = "PostgreSQL RDS endpoint"
   value       = aws_db_instance.strapi.endpoint
+}
+
+output "rds_port" {
+  description = "PostgreSQL port"
+  value       = aws_db_instance.strapi.port
 }
 
 output "rds_db_name" {
@@ -89,15 +87,19 @@ output "rds_db_name" {
 }
 
 ################################
-# CLOUDWATCH
+# SECURITY GROUPS
 ################################
-
-output "cloudwatch_log_group_name" {
-  description = "ECS CloudWatch log group name"
-  value       = aws_cloudwatch_log_group.sandeep_strapi.name
+output "alb_security_group_id" {
+  description = "ALB security group ID"
+  value       = aws_security_group.alb_sg.id
 }
 
-output "cloudwatch_dashboard_name" {
-  description = "CloudWatch dashboard name"
-  value       = aws_cloudwatch_dashboard.strapi.dashboard_name
+output "ecs_security_group_id" {
+  description = "ECS service security group ID"
+  value       = aws_security_group.ecs_sg.id
+}
+
+output "rds_security_group_id" {
+  description = "RDS security group ID"
+  value       = aws_security_group.rds_sg.id
 }
