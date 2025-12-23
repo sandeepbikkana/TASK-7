@@ -1,3 +1,4 @@
+
 provider "aws" {
   region = var.aws_region
 }
@@ -38,6 +39,10 @@ resource "aws_cloudwatch_log_group" "sandeep_strapi" {
 
 resource "aws_ecs_cluster" "sandeep_strapi" {
   name = "sandeep-strapi-cluster"
+}
+
+resource "aws_ecs_cluster_capacity_providers" "sandeep_strapi" {
+  cluster_name = aws_ecs_cluster.sandeep_strapi.name
 
   capacity_providers = [
     "FARGATE",
