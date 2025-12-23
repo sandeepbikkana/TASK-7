@@ -16,7 +16,7 @@ data "aws_vpc" "default" {
 # SUBNET DISCOVERY
 ################################
 
-# All subnets (for RDS – do NOT change later)
+# All subnets (used for RDS)
 data "aws_subnets" "all" {
   filter {
     name   = "vpc-id"
@@ -24,19 +24,19 @@ data "aws_subnets" "all" {
   }
 }
 
-# Fetch subnet details
+# Get subnet details
 data "aws_subnet" "by_id" {
   for_each = toset(data.aws_subnets.all.ids)
   id       = each.value
 }
 
-# One subnet per AZ (for ALB + ECS)
+# One subnet per AZ (ALB + ECS requirement)
 locals {
   alb_ecs_subnets = [
-    for az, subnet_ids in {
+    for az, ids in {
       for s in data.aws_subnet.by_id :
       s.availability_zone => s.id...
-    } : subnet_ids[0]
+    } : ids[0]
   ]
 }
 
@@ -127,7 +127,7 @@ resource "aws_security_group" "rds_sg" {
 }
 
 ################################
-# RDS (DO NOT CHANGE SUBNET GROUP)
+# RDS
 ################################
 resource "aws_db_subnet_group" "strapi" {
   name       = "sandeep-strapi-db-subnets"
@@ -245,7 +245,7 @@ resource "aws_iam_role_policy_attachment" "codedeploy_policy" {
 }
 
 ################################
-# TASK DEFINITION (PLACEHOLDER)
+# TASK DEFINITION (FARGATE)
 ################################
 resource "aws_ecs_task_definition" "baseline" {
   family                   = "sandeep-strapi-task"
@@ -280,9 +280,6 @@ resource "aws_ecs_task_definition" "baseline" {
 ################################
 # ECS SERVICE (CODEDEPLOY)
 ################################
-################################
-# ECS SERVICE (CODEDEPLOY – FINAL)
-################################
 resource "aws_ecs_service" "strapi" {
   name            = "sandeep-strapi-service"
   cluster         = aws_ecs_cluster.strapi.id
@@ -291,11 +288,6 @@ resource "aws_ecs_service" "strapi" {
 
   deployment_controller {
     type = "CODE_DEPLOY"
-  }
-
-  capacity_provider_strategy {
-    capacity_provider = "FARGATE"
-    weight            = 1
   }
 
   network_configuration {
@@ -322,7 +314,7 @@ resource "aws_ecs_service" "strapi" {
 }
 
 ################################
-# CODEDEPLOY BLUE/GREEN
+# CODEDEPLOY
 ################################
 resource "aws_codedeploy_app" "ecs" {
   name             = "sandeep-strapi-codedeploy"
@@ -347,7 +339,6 @@ resource "aws_codedeploy_deployment_group" "ecs" {
   }
 
   blue_green_deployment_config {
-
     deployment_ready_option {
       action_on_timeout = "CONTINUE_DEPLOYMENT"
     }
