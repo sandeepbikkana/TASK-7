@@ -12,10 +12,22 @@ data "aws_vpc" "default" {
   default = true
 }
 
-data "aws_subnets" "default" {
+# data "aws_subnets" "default" {
+#   filter {
+#     name   = "vpc-id"
+#     values = [data.aws_vpc.default.id]
+#   }
+# }
+
+data "aws_subnets" "public" {
   filter {
     name   = "vpc-id"
     values = [data.aws_vpc.default.id]
+  }
+
+  filter {
+    name   = "map-public-ip-on-launch"
+    values = ["true"]
   }
 }
 
@@ -110,7 +122,7 @@ resource "aws_security_group" "rds_sg" {
 ################################
 resource "aws_db_subnet_group" "strapi" {
   name       = "sandeep-strapi-db-subnets"
-  subnet_ids = data.aws_subnets.default.ids
+  subnet_ids = data.aws_subnets.public.ids
 }
 
 resource "aws_db_instance" "strapi" {
@@ -138,7 +150,7 @@ resource "aws_lb" "strapi" {
   name               = "sandeep-strapi-alb"
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_sg.id]
-  subnets            = data.aws_subnets.default.ids
+  subnets            = data.aws_subnets.public.ids
 }
 
 ################################
@@ -274,9 +286,8 @@ resource "aws_ecs_service" "strapi" {
   }
 
   network_configuration {
-    subnets          = data.aws_subnets.default.ids
+    subnets          = data.aws_subnets.public.ids
     security_groups  = [aws_security_group.ecs_sg.id]
-    assign_public_ip = true
   }
 
   load_balancer {
