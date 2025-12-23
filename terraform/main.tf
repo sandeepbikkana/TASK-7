@@ -31,14 +31,11 @@ data "aws_subnet" "by_id" {
 }
 
 locals {
-  alb_ecs_subnets = [
-    for az, subnets in {
-      for s in data.aws_subnet.by_id :
-      s.availability_zone => s.id...
-    } : subnets[0]
-  ]
+  alb_ecs_subnets = values({
+    for s in data.aws_subnet.by_id :
+    s.availability_zone => s.id
+  })
 }
-
 
 ################################
 # CLOUDWATCH LOG GROUP
@@ -337,13 +334,18 @@ resource "aws_codedeploy_deployment_group" "ecs" {
     enabled = true
     events  = ["DEPLOYMENT_FAILURE"]
   }
+  
+ blue_green_deployment_config {
 
-  blue_green_deployment_config {
-    terminate_blue_instances_on_deployment_success {
-      action = "TERMINATE"
-    }
+  deployment_ready_option {
+    action_on_timeout = "CONTINUE_DEPLOYMENT"
   }
 
+  terminate_blue_instances_on_deployment_success {
+    action = "TERMINATE"
+  }
+}
+  
   ecs_service {
     cluster_name = aws_ecs_cluster.strapi.name
     service_name = aws_ecs_service.strapi.name
