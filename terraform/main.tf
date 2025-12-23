@@ -112,7 +112,7 @@ resource "aws_db_subnet_group" "sandeep_strapi" {
 resource "aws_db_instance" "sandeep_strapi" {
   identifier        = "sandeep-strapi-postgres"
   engine            = "postgres"
-  engine_version    = "15.3"
+  engine_version    = "15.15"
   instance_class    = "db.t3.micro"
   allocated_storage = 20
 
