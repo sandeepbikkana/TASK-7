@@ -28,10 +28,12 @@ jobs:
         working-directory: terraform
         run: terraform init -input=false
 
-      - name: Read RDS endpoint
+      - name: Load Terraform outputs
         working-directory: terraform
+        shell: bash
         run: |
-          echo "DB_HOST=$(terraform output -raw rds_endpoint)" >> $GITHUB_ENV
+          DB_HOST="$(terraform output -raw rds_endpoint | tr -d '\n')"
+          echo "DB_HOST=$DB_HOST" >> "$GITHUB_ENV"
 
       - name: Create container definition
         run: |
@@ -76,6 +78,7 @@ jobs:
             --application-name sandeep-strapi-codedeploy \
             --deployment-group-name sandeep-strapi-dg \
             --revision revisionType=AppSpecContent,appSpecContent="{content=$(cat appspec-final.yaml)}"
+
 
 
 
