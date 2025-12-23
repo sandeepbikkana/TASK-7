@@ -31,13 +31,25 @@ resource "aws_cloudwatch_log_group" "sandeep_strapi" {
   retention_in_days = 14
 }
 
+
 ################################
-# ECS CLUSTER
+# ECS CLUSTER (FARGATE ENABLED)
 ################################
 
 resource "aws_ecs_cluster" "sandeep_strapi" {
   name = "sandeep-strapi-cluster"
+
+  capacity_providers = [
+    "FARGATE",
+    "FARGATE_SPOT"
+  ]
+
+  default_capacity_provider_strategy {
+    capacity_provider = "FARGATE"
+    weight            = 1
+  }
 }
+
 
 ################################
 # SECURITY GROUPS
@@ -247,6 +259,11 @@ resource "aws_ecs_service" "sandeep_strapi" {
 
   deployment_controller {
     type = "CODE_DEPLOY"
+  }
+
+  capacity_provider_strategy {
+  capacity_provider = "FARGATE"
+  weight            = 1
   }
 
   network_configuration {
