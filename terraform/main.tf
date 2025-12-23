@@ -290,6 +290,11 @@ resource "aws_ecs_service" "strapi" {
     type = "CODE_DEPLOY"
   }
 
+  capacity_provider_strategy {
+  capacity_provider = "FARGATE"
+  weight            = 1
+  }
+
   network_configuration {
     subnets         = local.alb_ecs_subnets
     security_groups = [aws_security_group.ecs_sg.id]
