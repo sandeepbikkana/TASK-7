@@ -131,7 +131,10 @@ jobs:
       ################################
       - name: Deploy using CodeDeploy
         run: |
+          APPSPEC_CONTENT=$(jq -Rs . < appspec-final.yaml)
+      
           aws deploy create-deployment \
             --application-name sandeep-strapi-codedeploy \
             --deployment-group-name sandeep-strapi-dg \
-            --revision revisionType=AppSpecContent,appSpecContent="{content=$(cat appspec-final.yaml)}"
+            --revision revisionType=AppSpecContent,appSpecContent="{\"content\":$APPSPEC_CONTENT}"
+
