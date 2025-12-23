@@ -256,27 +256,25 @@ resource "aws_ecs_task_definition" "sandeep_strapi" {
 # ECS SERVICE (CODEDEPLOY)
 ################################
 
-
-
 resource "aws_ecs_service" "sandeep_strapi" {
-  name            = "sandeep-strapi-service"
-  cluster         = aws_ecs_cluster.sandeep_strapi.id
+  name    = "sandeep-strapi-service"
+  cluster = aws_ecs_cluster.sandeep_strapi.id
+
   task_definition = aws_ecs_task_definition.sandeep_strapi.arn
   desired_count   = 1
 
   deployment_controller {
     type = "CODE_DEPLOY"
   }
-  force_new_deployment = true
-  
+
   capacity_provider_strategy {
-  capacity_provider = "FARGATE"
-  weight            = 1
+    capacity_provider = "FARGATE"
+    weight            = 1
   }
 
   network_configuration {
-    subnets         = data.aws_subnets.alb.ids
-    security_groups = [aws_security_group.sandeep_ecs_sg.id]
+    subnets          = data.aws_subnets.alb.ids
+    security_groups  = [aws_security_group.sandeep_ecs_sg.id]
     assign_public_ip = false
   }
 
@@ -285,7 +283,16 @@ resource "aws_ecs_service" "sandeep_strapi" {
     container_name   = "strapi"
     container_port   = 1337
   }
+
+  lifecycle {
+    ignore_changes = [
+      task_definition,
+      capacity_provider_strategy,
+      desired_count
+    ]
+  }
 }
+
 
 ################################
 # CODEDEPLOY BLUE/GREEN
