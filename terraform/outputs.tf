@@ -23,12 +23,12 @@ output "ecs_cluster_name" {
 
 output "ecs_service_name" {
   description = "ECS service name"
-  value       = aws_ecs_service.sandeep_strapi.name
+  value       = aws_ecs_service.strapi.name
 }
 
 output "ecs_task_family" {
   description = "ECS task definition family"
-  value       = aws_ecs_task_definition.sandeep_strapi.family
+  value       = aws_ecs_task_definition.baseline.family
 }
 
 ################################
@@ -37,27 +37,27 @@ output "ecs_task_family" {
 
 output "alb_name" {
   description = "Application Load Balancer name"
-  value       = aws_lb.sandeep_strapi.name
+  value       = aws_lb.strapi.name
 }
 
 output "alb_dns_name" {
   description = "Application Load Balancer DNS name"
-  value       = aws_lb.sandeep_strapi.dns_name
+  value       = aws_lb.strapi.dns_name
 }
 
 output "alb_listener_arn" {
   description = "ALB HTTP listener ARN"
-  value       = aws_lb_listener.sandeep_http.arn
+  value       = aws_lb_listener.http.arn
 }
 
 output "blue_target_group_arn" {
   description = "Blue target group ARN"
-  value       = aws_lb_target_group.sandeep_blue.arn
+  value       = aws_lb_target_group.blue.arn
 }
 
 output "green_target_group_arn" {
   description = "Green target group ARN"
-  value       = aws_lb_target_group.sandeep_green.arn
+  value       = aws_lb_target_group.green.arn
 }
 
 ################################
@@ -66,12 +66,12 @@ output "green_target_group_arn" {
 
 output "codedeploy_application_name" {
   description = "CodeDeploy application name"
-  value       = aws_codedeploy_app.sandeep_strapi.name
+  value       = aws_codedeploy_app.ecs.name
 }
 
 output "codedeploy_deployment_group_name" {
   description = "CodeDeploy deployment group name"
-  value       = aws_codedeploy_deployment_group.sandeep_strapi.deployment_group_name
+  value       = aws_codedeploy_deployment_group.ecs.deployment_group_name
 }
 
 ################################
@@ -80,12 +80,12 @@ output "codedeploy_deployment_group_name" {
 
 output "rds_endpoint" {
   description = "PostgreSQL RDS endpoint"
-  value       = aws_db_instance.sandeep_strapi.endpoint
+  value       = aws_db_instance.strapi.endpoint
 }
 
 output "rds_db_name" {
   description = "PostgreSQL database name"
-  value       = aws_db_instance.sandeep_strapi.db_name
+  value       = aws_db_instance.strapi.db_name
 }
 
 ################################
@@ -99,5 +99,5 @@ output "cloudwatch_log_group_name" {
 
 output "cloudwatch_dashboard_name" {
   description = "CloudWatch dashboard name"
-  value       = aws_cloudwatch_dashboard.sandeep_strapi.dashboard_name
+  value       = aws_cloudwatch_dashboard.strapi.dashboard_name
 }
