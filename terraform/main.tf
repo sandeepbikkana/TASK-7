@@ -295,6 +295,8 @@ resource "aws_ecs_service" "strapi" {
   weight            = 1
   }
 
+  force_new_deployment = true
+
   network_configuration {
     subnets         = local.alb_ecs_subnets
     security_groups = [aws_security_group.ecs_sg.id]
