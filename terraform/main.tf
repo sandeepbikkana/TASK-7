@@ -302,6 +302,16 @@ resource "aws_ecs_service" "sandeep_strapi" {
     type = "CODE_DEPLOY"
   }
 
+  capacity_provider_strategy {
+    capacity_provider = "FARGATE"
+    weight            = 1
+  }
+
+  network_configuration {
+    subnets          = data.aws_subnets.alb.ids
+    security_groups  = [aws_security_group.sandeep_ecs_sg.id]
+    assign_public_ip = true
+  }
   load_balancer {
     target_group_arn = aws_lb_target_group.sandeep_blue.arn
     container_name   = "strapi"
