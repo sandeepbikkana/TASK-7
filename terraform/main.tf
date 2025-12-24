@@ -264,7 +264,7 @@ resource "aws_ecs_task_definition" "baseline" {
   container_definitions = jsonencode([
     {
       name      = "strapi"
-      image     = "PLACEHOLDER"
+      image     = "${var.ecr_repo}:${var.image_tag}"
       essential = true
       portMappings = [{ containerPort = 1337 }]
       logConfiguration = {
@@ -292,7 +292,7 @@ resource "aws_ecs_service" "strapi" {
   cluster         = aws_ecs_cluster.strapi.id
   task_definition = aws_ecs_task_definition.baseline.arn
   desired_count   = 1
-  
+
   launch_type      = "FARGATE"
   platform_version = "LATEST"
 
