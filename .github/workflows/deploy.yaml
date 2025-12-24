@@ -46,15 +46,18 @@ jobs:
       ################################
       # Fetch Terraform Outputs
       ################################
+
+
       - name: Load Terraform outputs
         working-directory: terraform
         shell: bash
         run: |
-          DB_ENDPOINT=$(terraform output -raw rds_endpoint)
-          DB_HOST=$(echo "$DB_ENDPOINT" | awk -F':' '{print $1}')
+          set -e
+
+          DB_ENDPOINT="$(terraform output -raw rds_endpoint)"
+          DB_HOST="$(echo "$DB_ENDPOINT" | cut -d':' -f1)"
+
           echo "DATABASE_HOST=$DB_HOST" >> "$GITHUB_ENV"
-
-
 
       ################################
       # Generate Container Definition
