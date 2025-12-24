@@ -95,15 +95,16 @@ jobs:
       - name: Register ECS task definition
         run: |
           TASK_DEF_ARN=$(aws ecs register-task-definition \
-            --family sandeep-strapi-task \
-            --network-mode awsvpc \
-            --requires-compatibilities FARGATE \
-            --cpu "512" \
-            --memory "1024" \
-            --execution-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/sandeep-ecs-task-execution-role \
-            --container-definitions file://container-def.json \
-            --query 'taskDefinition.taskDefinitionArn' \
-            --output text)
+          --family sandeep-strapi-task \
+          --network-mode awsvpc \
+          --requires-compatibilities FARGATE \
+          --cpu "512" \
+          --memory "1024" \
+          --runtime-platform operatingSystemFamily=LINUX,cpuArchitecture=X86_64 \
+          --execution-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/sandeep-ecs-task-execution-role \
+          --container-definitions file://container-def.json \
+          --query 'taskDefinition.taskDefinitionArn' \
+          --output text)
 
           echo "TASK_DEF_ARN=$TASK_DEF_ARN" >> "$GITHUB_ENV"
 
@@ -143,3 +144,29 @@ jobs:
                 \"content\": $APPSPEC_CONTENT
               }
             }"
+
+      - name: Wait for CodeDeploy deployment
+        run: |
+          DEPLOYMENT_ID=$(aws deploy list-deployments \
+            --application-name sandeep-strapi-codedeploy \
+            --deployment-group-name sandeep-strapi-dg \
+            --query 'deployments[0]' \
+            --output text)
+
+          aws deploy wait deployment-successful \
+            --deployment-id $DEPLOYMENT_ID
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
