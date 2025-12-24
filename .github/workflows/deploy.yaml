@@ -48,10 +48,12 @@ jobs:
       ################################
       - name: Load Terraform outputs
         working-directory: terraform
+        shell: bash
         run: |
-          DB_ENDPOINT="$(terraform output -raw rds_endpoint | tr -d '\n')"
-          DB_HOST="$(echo "$DB_ENDPOINT" | cut -d':' -f1)"
-          echo "DB_HOST=$DB_HOST" >> "$GITHUB_ENV"
+          DB_ENDPOINT=$(terraform output -raw rds_endpoint)
+          DB_HOST=$(echo "$DB_ENDPOINT" | awk -F':' '{print $1}')
+          echo "DATABASE_HOST=$DB_HOST" >> "$GITHUB_ENV"
+
 
 
       ################################
