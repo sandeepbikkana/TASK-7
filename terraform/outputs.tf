@@ -71,9 +71,9 @@ output "codedeploy_deployment_group_name" {
 ################################
 # RDS
 ################################
-output "rds_endpoint" {
-  description = "PostgreSQL RDS endpoint"
-  value       = aws_db_instance.strapi.endpoint
+output "rds_hostname" {
+  description = "PostgreSQL RDS hostname only"
+  value       = aws_db_instance.strapi.address
 }
 
 output "rds_port" {
