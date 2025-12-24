@@ -44,28 +44,23 @@ jobs:
         run: terraform init -input=false
 
       ################################
-      # Fetch Terraform Outputs
+      # Get DB Host (SAFE METHOD)
       ################################
-
-      - name: Load Terraform outputs
+      - name: Get DB host
+        id: db
         working-directory: terraform
         shell: bash
         run: |
-          # Silence everything except our final printf
-          exec 3>&1 1>/tmp/tf.out 2>&1
-
           DB_ENDPOINT="$(terraform output -raw rds_endpoint)"
           DB_HOST="${DB_ENDPOINT%%:*}"
-
-          # Restore stdout ONLY for env write
-          exec 1>&3 3>&-
-
-          printf "DATABASE_HOST=%s\n" "$DB_HOST" >> "$GITHUB_ENV"
+          echo "db_host=$DB_HOST" >> "$GITHUB_OUTPUT"
 
       ################################
       # Generate Container Definition
       ################################
       - name: Generate container definition
+        env:
+          DATABASE_HOST: ${{ steps.db.outputs.db_host }}
         run: |
           cat <<EOF > container-def.json
           [
@@ -83,7 +78,7 @@ jobs:
                 { "name": "JWT_SECRET", "value": "${{ secrets.JWT_SECRET }}" },
                 { "name": "API_TOKEN_SALT", "value": "${{ secrets.API_TOKEN_SALT }}" },
                 { "name": "DATABASE_CLIENT", "value": "postgres" },
-                { "name": "DATABASE_HOST", "value": "$DB_HOST" },
+                { "name": "DATABASE_HOST", "value": "$DATABASE_HOST" },
                 { "name": "DATABASE_PORT", "value": "5432" },
                 { "name": "DATABASE_NAME", "value": "strapi" },
                 { "name": "DATABASE_USERNAME", "value": "${{ secrets.DB_USERNAME }}" },
@@ -103,23 +98,24 @@ jobs:
       # Register ECS Task Definition
       ################################
       - name: Register ECS task definition
+        id: taskdef
         run: |
           TASK_DEF_ARN=$(aws ecs register-task-definition \
-          --family sandeep-strapi-task \
-          --network-mode awsvpc \
-          --requires-compatibilities FARGATE \
-          --cpu "512" \
-          --memory "1024" \
-          --runtime-platform operatingSystemFamily=LINUX,cpuArchitecture=X86_64 \
-          --execution-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/sandeep-ecs-task-execution-role \
-          --container-definitions file://container-def.json \
-          --query 'taskDefinition.taskDefinitionArn' \
-          --output text)
+            --family sandeep-strapi-task \
+            --network-mode awsvpc \
+            --requires-compatibilities FARGATE \
+            --cpu "512" \
+            --memory "1024" \
+            --runtime-platform operatingSystemFamily=LINUX,cpuArchitecture=X86_64 \
+            --execution-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/sandeep-ecs-task-execution-role \
+            --container-definitions file://container-def.json \
+            --query 'taskDefinition.taskDefinitionArn' \
+            --output text)
 
-          echo "TASK_DEF_ARN=$TASK_DEF_ARN" >> "$GITHUB_ENV"
+          echo "task_def_arn=$TASK_DEF_ARN" >> "$GITHUB_OUTPUT"
 
       ################################
-      # Prepare AppSpec for CodeDeploy
+      # Prepare AppSpec
       ################################
       - name: Prepare AppSpec file
         run: |
@@ -129,22 +125,19 @@ jobs:
             - TargetService:
                 Type: AWS::ECS::Service
                 Properties:
-                  TaskDefinition: <TASK_DEFINITION>
+                  TaskDefinition: ${{ steps.taskdef.outputs.task_def_arn }}
                   LoadBalancerInfo:
                     ContainerName: "strapi"
                     ContainerPort: 1337
           EOF
 
-          sed "s|<TASK_DEFINITION>|$TASK_DEF_ARN|g" appspec.yaml > appspec-final.yaml
-
       ################################
-      # CodeDeploy Blue/Green Deployment
-      ###############################
-
+      # Deploy with CodeDeploy
+      ################################
       - name: Deploy using CodeDeploy
         run: |
-          APPSPEC_CONTENT=$(jq -Rs . < appspec-final.yaml)
-      
+          APPSPEC_CONTENT=$(jq -Rs . < appspec.yaml)
+
           aws deploy create-deployment \
             --application-name sandeep-strapi-codedeploy \
             --deployment-group-name sandeep-strapi-dg \
@@ -155,6 +148,9 @@ jobs:
               }
             }"
 
+      ################################
+      # Wait for Deployment
+      ################################
       - name: Wait for CodeDeploy deployment
         run: |
           DEPLOYMENT_ID=$(aws deploy list-deployments \
@@ -165,18 +161,3 @@ jobs:
 
           aws deploy wait deployment-successful \
             --deployment-id $DEPLOYMENT_ID
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
