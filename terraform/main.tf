@@ -247,6 +247,7 @@ resource "aws_iam_role_policy_attachment" "codedeploy_policy" {
 ################################
 # TASK DEFINITION (FARGATE)
 ################################
+
 resource "aws_ecs_task_definition" "baseline" {
   family                   = "sandeep-strapi-task"
   requires_compatibilities = ["FARGATE"]
@@ -254,6 +255,11 @@ resource "aws_ecs_task_definition" "baseline" {
   cpu                      = "512"
   memory                   = "1024"
   execution_role_arn       = aws_iam_role.ecs_exec.arn
+
+  runtime_platform {
+    operating_system_family = "LINUX"
+    cpu_architecture        = "X86_64"
+  }
 
   container_definitions = jsonencode([
     {
@@ -280,11 +286,13 @@ resource "aws_ecs_task_definition" "baseline" {
 ################################
 # ECS SERVICE (CODEDEPLOY)
 ################################
+
 resource "aws_ecs_service" "strapi" {
   name            = "sandeep-strapi-service"
   cluster         = aws_ecs_cluster.strapi.id
   task_definition = aws_ecs_task_definition.baseline.arn
   desired_count   = 1
+  platform_version = "LATEST"
 
   deployment_controller {
     type = "CODE_DEPLOY"
