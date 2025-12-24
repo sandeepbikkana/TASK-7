@@ -29,38 +29,11 @@ jobs:
           aws-region:            ${{ secrets.AWS_REGION }}
 
       ################################
-      # Setup Terraform
-      ################################
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: 1.5.0
-
-      ################################
-      # Terraform Init
-      ################################
-      - name: Terraform init
-        working-directory: terraform
-        run: terraform init -input=false
-
-      ################################
-      # Get DB Host (SAFE METHOD)
-      ################################
-      - name: Get DB host
-        id: db
-        working-directory: terraform
-        shell: bash
-        run: |
-          DB_ENDPOINT="$(terraform output -raw rds_endpoint)"
-          DB_HOST="${DB_ENDPOINT%%:*}"
-          echo "db_host=$DB_HOST" >> "$GITHUB_OUTPUT"
-
-      ################################
       # Generate Container Definition
       ################################
       - name: Generate container definition
         env:
-          DATABASE_HOST: ${{ steps.db.outputs.db_host }}
+          DATABASE_HOST: ${{ secrets.DATABASE_HOST }}
         run: |
           cat <<EOF > container-def.json
           [
