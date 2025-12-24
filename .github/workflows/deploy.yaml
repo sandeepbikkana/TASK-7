@@ -49,8 +49,10 @@ jobs:
       - name: Load Terraform outputs
         working-directory: terraform
         run: |
-          DB_HOST="$(terraform output -raw rds_endpoint | tr -d '\n')"
+          DB_ENDPOINT="$(terraform output -raw rds_endpoint | tr -d '\n')"
+          DB_HOST="$(echo "$DB_ENDPOINT" | cut -d':' -f1)"
           echo "DB_HOST=$DB_HOST" >> "$GITHUB_ENV"
+
 
       ################################
       # Generate Container Definition
