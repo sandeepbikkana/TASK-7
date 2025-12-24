@@ -303,6 +303,7 @@ resource "aws_ecs_service" "strapi" {
   network_configuration {
     subnets         = local.alb_ecs_subnets
     security_groups = [aws_security_group.ecs_sg.id]
+    assign_public_ip = true
   }
 
   load_balancer {
