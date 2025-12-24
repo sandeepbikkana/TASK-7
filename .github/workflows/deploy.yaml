@@ -51,7 +51,15 @@ jobs:
         working-directory: terraform
         shell: bash
         run: |
-          printf "DATABASE_HOST=%s\n" "$(terraform output -raw rds_hostname)" >> "$GITHUB_ENV"
+          # Get endpoint (host:port)
+          DB_ENDPOINT="$(terraform output -raw rds_endpoint)"
+
+          # Strip port safely
+          DB_HOST="${DB_ENDPOINT%%:*}"
+
+          # Export clean env var (KEY=value only)
+          printf "DATABASE_HOST=%s\n" "$DB_HOST" >> "$GITHUB_ENV"
+
 
       ################################
       # Generate Container Definition
