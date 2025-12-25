@@ -1,15 +1,17 @@
-name: CD - ECS Blue Green Deploy (Manual)
+name: TASK-11 - ECS Blue Green Deployment
 
 on:
-  workflow_dispatch:
-    inputs:
-      image_tag:
-        description: "Docker image tag to deploy"
-        required: true
+  push:
+    branches:
+      - mai
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: ap-south-1
+      IMAGE_TAG: ${{ github.sha }}
 
     steps:
       ################################
@@ -19,39 +21,46 @@ jobs:
         uses: actions/checkout@v4
 
       ################################
-      # AWS Credentials
+      # Configure AWS Credentials
       ################################
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v3
         with:
           aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region:            ${{ secrets.AWS_REGION }}
+          aws-region:            ${{ env.AWS_REGION }}
 
       ################################
-      # Generate Container Definition
+      # Login to Amazon ECR
       ################################
-      - name: Generate container definition
-        env:
-          DATABASE_HOST: ${{ secrets.DATABASE_HOST }}
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region $AWS_REGION \
+          | docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}
+
+      ################################
+      # Build & Push Docker Image
+      ################################
+      - name: Build and push Docker image
+        run: |
+          docker build -t ${{ secrets.ECR_REPO }}:$IMAGE_TAG .
+          docker push ${{ secrets.ECR_REPO }}:$IMAGE_TAG
+
+      ################################
+      # Register New ECS Task Definition
+      ################################
+      - name: Register ECS task definition
+        id: taskdef
         run: |
           cat <<EOF > container-def.json
           [
             {
               "name": "strapi",
-              "image": "${{ secrets.ECR_REPO }}:${{ github.event.inputs.image_tag }}",
+              "image": "${{ secrets.ECR_REPO }}:$IMAGE_TAG",
               "essential": true,
-              "portMappings": [
-                { "containerPort": 1337 }
-              ],
+              "portMappings": [{ "containerPort": 1337 }],
               "environment": [
-                { "name": "NODE_ENV", "value": "production" },
-                { "name": "APP_KEYS", "value": "${{ secrets.APP_KEYS }}" },
-                { "name": "ADMIN_JWT_SECRET", "value": "${{ secrets.ADMIN_JWT_SECRET }}" },
-                { "name": "JWT_SECRET", "value": "${{ secrets.JWT_SECRET }}" },
-                { "name": "API_TOKEN_SALT", "value": "${{ secrets.API_TOKEN_SALT }}" },
-                { "name": "DATABASE_CLIENT", "value": "postgres" },
-                { "name": "DATABASE_HOST", "value": "$DATABASE_HOST" },
+                { "name": "DATABASE_HOST", "value": "${{ secrets.DATABASE_HOST }}" },
                 { "name": "DATABASE_PORT", "value": "5432" },
                 { "name": "DATABASE_NAME", "value": "strapi" },
                 { "name": "DATABASE_USERNAME", "value": "${{ secrets.DB_USERNAME }}" },
@@ -61,36 +70,23 @@ jobs:
           ]
           EOF
 
-      ################################
-      # Validate JSON
-      ################################
-      - name: Validate container JSON
-        run: jq . container-def.json
-
-      ################################
-      # Register ECS Task Definition
-      ################################
-      - name: Register ECS task definition
-        id: taskdef
-        run: |
           TASK_DEF_ARN=$(aws ecs register-task-definition \
             --family sandeep-strapi-task \
             --network-mode awsvpc \
             --requires-compatibilities FARGATE \
-            --cpu "512" \
-            --memory "1024" \
-            --runtime-platform operatingSystemFamily=LINUX,cpuArchitecture=X86_64 \
+            --cpu 512 \
+            --memory 1024 \
             --execution-role-arn arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/sandeep-ecs-task-execution-role \
             --container-definitions file://container-def.json \
             --query 'taskDefinition.taskDefinitionArn' \
             --output text)
 
-          echo "task_def_arn=$TASK_DEF_ARN" >> "$GITHUB_OUTPUT"
+          echo "task_def_arn=$TASK_DEF_ARN" >> $GITHUB_OUTPUT
 
       ################################
-      # Prepare AppSpec
+      # Create AppSpec File
       ################################
-      - name: Prepare AppSpec file
+      - name: Create AppSpec
         run: |
           cat <<EOF > appspec.yaml
           version: 1
@@ -100,37 +96,29 @@ jobs:
                 Properties:
                   TaskDefinition: ${{ steps.taskdef.outputs.task_def_arn }}
                   LoadBalancerInfo:
-                    ContainerName: "strapi"
+                    ContainerName: strapi
                     ContainerPort: 1337
           EOF
 
       ################################
-      # Deploy with CodeDeploy
+      # Trigger CodeDeploy Deployment
       ################################
-      - name: Deploy using CodeDeploy
+      - name: Trigger CodeDeploy deployment
+        id: deploy
         run: |
-          APPSPEC_CONTENT=$(jq -Rs . < appspec.yaml)
-
-          aws deploy create-deployment \
+          DEPLOYMENT_ID=$(aws deploy create-deployment \
             --application-name sandeep-strapi-codedeploy \
             --deployment-group-name sandeep-strapi-dg \
-            --revision "{
-              \"revisionType\": \"AppSpecContent\",
-              \"appSpecContent\": {
-                \"content\": $APPSPEC_CONTENT
-              }
-            }"
-
-      ################################
-      # Wait for Deployment
-      ################################
-      - name: Wait for CodeDeploy deployment
-        run: |
-          DEPLOYMENT_ID=$(aws deploy list-deployments \
-            --application-name sandeep-strapi-codedeploy \
-            --deployment-group-name sandeep-strapi-dg \
-            --query 'deployments[0]' \
+            --revision revisionType=AppSpecContent,appSpecContent="{content=$(cat appspec.yaml)}" \
+            --query deploymentId \
             --output text)
 
+          echo "deployment_id=$DEPLOYMENT_ID" >> $GITHUB_OUTPUT
+
+      ################################
+      # Monitor Deployment & Rollback
+      ################################
+      - name: Wait for deployment to complete
+        run: |
           aws deploy wait deployment-successful \
-            --deployment-id $DEPLOYMENT_ID
+            --deployment-id ${{ steps.deploy.outputs.deployment_id }}
