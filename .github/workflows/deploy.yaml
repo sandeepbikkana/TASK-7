@@ -60,6 +60,12 @@ jobs:
               "essential": true,
               "portMappings": [{ "containerPort": 1337 }],
               "environment": [
+                { "name": "NODE_ENV", "value": "production" },
+                { "name": "APP_KEYS", "value": "${{ secrets.APP_KEYS }}" },
+                { "name": "ADMIN_JWT_SECRET", "value": "${{ secrets.ADMIN_JWT_SECRET }}" },
+                { "name": "JWT_SECRET", "value": "${{ secrets.JWT_SECRET }}" },
+                { "name": "API_TOKEN_SALT", "value": "${{ secrets.API_TOKEN_SALT }}" },
+                { "name": "DATABASE_CLIENT", "value": "postgres" },
                 { "name": "DATABASE_HOST", "value": "${{ secrets.DATABASE_HOST }}" },
                 { "name": "DATABASE_PORT", "value": "5432" },
                 { "name": "DATABASE_NAME", "value": "strapi" },
@@ -122,4 +128,5 @@ jobs:
         run: |
           aws deploy wait deployment-successful \
             --deployment-id ${{ steps.deploy.outputs.deployment_id }}
+
 
