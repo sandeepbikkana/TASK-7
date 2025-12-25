@@ -1,4 +1,17 @@
 ################################
+# TERRAFORM BACKEND
+################################
+terraform {
+  backend "s3" {
+    bucket  = "sandeep-tfstate-buck"
+    key     = "strapi/ecs/terraform.tfstate"
+    region  = "ap-south-1"
+    encrypt = true
+    # dynamodb_table = "terraform-locks"
+  }
+}
+
+################################
 # PROVIDER
 ################################
 provider "aws" {
@@ -15,8 +28,6 @@ data "aws_vpc" "default" {
 ################################
 # SUBNET DISCOVERY
 ################################
-
-# All subnets (used for RDS)
 data "aws_subnets" "all" {
   filter {
     name   = "vpc-id"
@@ -24,13 +35,12 @@ data "aws_subnets" "all" {
   }
 }
 
-# Get subnet details
 data "aws_subnet" "by_id" {
   for_each = toset(data.aws_subnets.all.ids)
   id       = each.value
 }
 
-# One subnet per AZ (ALB + ECS requirement)
+# One subnet per AZ (ALB requirement)
 locals {
   alb_ecs_subnets = [
     for az, ids in {
@@ -127,7 +137,7 @@ resource "aws_security_group" "rds_sg" {
 }
 
 ################################
-# RDS
+# RDS POSTGRES
 ################################
 resource "aws_db_subnet_group" "strapi" {
   name       = "sandeep-strapi-db-subnets"
@@ -245,9 +255,8 @@ resource "aws_iam_role_policy_attachment" "codedeploy_policy" {
 }
 
 ################################
-# TASK DEFINITION (FARGATE)
+# BASELINE TASK DEFINITION
 ################################
-
 resource "aws_ecs_task_definition" "baseline" {
   family                   = "sandeep-strapi-task"
   requires_compatibilities = ["FARGATE"]
@@ -264,7 +273,7 @@ resource "aws_ecs_task_definition" "baseline" {
   container_definitions = jsonencode([
     {
       name      = "strapi"
-      image     = "${var.ecr_repo}:${var.image_tag}"
+      image     = "PLACEHOLDER"
       essential = true
       portMappings = [{ containerPort = 1337 }]
       logConfiguration = {
@@ -286,7 +295,6 @@ resource "aws_ecs_task_definition" "baseline" {
 ################################
 # ECS SERVICE (CODEDEPLOY)
 ################################
-
 resource "aws_ecs_service" "strapi" {
   name            = "sandeep-strapi-service"
   cluster         = aws_ecs_cluster.strapi.id
@@ -301,8 +309,8 @@ resource "aws_ecs_service" "strapi" {
   }
 
   network_configuration {
-    subnets         = local.alb_ecs_subnets
-    security_groups = [aws_security_group.ecs_sg.id]
+    subnets          = local.alb_ecs_subnets
+    security_groups  = [aws_security_group.ecs_sg.id]
     assign_public_ip = true
   }
 
