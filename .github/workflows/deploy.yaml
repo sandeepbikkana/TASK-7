@@ -3,7 +3,7 @@ name: TASK-11 - ECS Blue Green Deployment
 on:
   push:
     branches:
-      - mai
+      - main
 
 jobs:
   deploy:
@@ -122,3 +122,4 @@ jobs:
         run: |
           aws deploy wait deployment-successful \
             --deployment-id ${{ steps.deploy.outputs.deployment_id }}
+
